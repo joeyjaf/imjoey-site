@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 function clamp(n, min, max) {
@@ -6,18 +6,12 @@ function clamp(n, min, max) {
 }
 
 function useTypewriter(steps, { speedMs = 18, pauseMs = 500 } = {}) {
-  // steps: [{ id, text }]
   const [stepIndex, setStepIndex] = useState(0);
   const [charIndex, setCharIndex] = useState(0);
-  const [isDone, setIsDone] = useState(false);
-
   const current = steps[stepIndex] || null;
 
   useEffect(() => {
-    if (!current) {
-      setIsDone(true);
-      return;
-    }
+    if (!current) return;
 
     const isStepDone = charIndex >= current.text.length;
 
@@ -45,62 +39,37 @@ function useTypewriter(steps, { speedMs = 18, pauseMs = 500 } = {}) {
     return map;
   }, [steps, stepIndex, charIndex]);
 
-  const cursorId = current?.id ?? null;
-
-  return { typedById, cursorId, isDone, stepIndex };
+  return { typedById, stepIndex };
 }
 
-function Cursor({ visible }) {
-  return (
-    <span className={"cursor" + (visible ? " cursor--on" : "")} aria-hidden="true">
-      &nbsp;
-    </span>
-  );
+function Cursor() {
+  return <span className="cursor" aria-hidden="true">&nbsp;</span>;
 }
 
-function VideoRail({ title, videos, onAdd, onRemove }) {
-  const inputRef = useRef(null);
-
+function VideoRail({ title, videos }) {
   return (
     <section className="section">
       <div className="sectionHeader">
         <h2 className="sectionTitle">{title}</h2>
-        <div className="railActions">
-          <button
-            className="btn"
-            onClick={() => inputRef.current?.click()}
-            type="button"
-          >
-            Upload videos
-          </button>
-          <input
-            ref={inputRef}
-            className="hiddenInput"
-            type="file"
-            accept="video/*"
-            multiple
-            onChange={(e) => onAdd(e.target.files)}
-          />
-        </div>
       </div>
 
       {videos.length === 0 ? (
         <div className="emptyRail">
           <div className="emptyRailInner">
-            <div className="emptyRailTitle">No videos yet</div>
-            <div className="emptyRailHint">Upload videos to populate this carousel.</div>
+            <div className="emptyRailTitle">Coming soon</div>
+            <div className="emptyRailHint">No videos added yet.</div>
           </div>
         </div>
       ) : (
         <div className="rail" role="region" aria-label={`${title} carousel`}>
           {videos.map((v) => (
             <div key={v.id} className="videoCard">
-              <video className="video" src={v.url} controls preload="metadata" />
+              <video className="video" controls preload="metadata">
+                <source src={v.url} type={v.type} />
+                Your browser does not support this video format.
+              </video>
               <div className="videoMeta">
                 <div className="videoName" title={v.name}>{v.name}</div>
-                <button className="btn btn--ghost" type="button" onClick={() => onRemove(v.id)}>
-                  Remove
-                </button>
               </div>
             </div>
           ))}
@@ -139,81 +108,34 @@ export default function App() {
     `• # of Card Approvals: 130+\n` +
     `• Businesses Launched: 10+`;
 
-  // Steps are typed in order; we show photo upload after "greeting" finishes but before "description" starts.
+  // Type ONLY the intro + background (no duplicate video headers)
   const steps = useMemo(
     () => [
       { id: "greeting", text: greeting },
       { id: "desc", text: "\n\n" + description },
       { id: "bgHeader", text: "\n\n" + bgHeader },
       { id: "bgBody", text: "\n\n" + bgBody },
-      { id: "videoHeader", text: "\n\nVideo Content:" },
-      { id: "testimonialHeader", text: "\n\nClient testimonials:" },
     ],
-    []
+    [greeting, description, bgHeader, bgBody]
   );
 
-  const { typedById, cursorId, stepIndex } = useTypewriter(steps, {
-    speedMs: 14,     // typing speed
-    pauseMs: 420,    // pause between blocks
-  });
+  const { typedById, stepIndex } = useTypewriter(steps, { speedMs: 14, pauseMs: 420 });
 
-  const greetingDone = stepIndex >= 1; // after greeting step completes
-  const descriptionStarted = stepIndex >= 1; // desc starts at index 1
-  const showPhoto = greetingDone && !descriptionStarted ? true : greetingDone; // visible once greeting is done
-
-  const [photoUrl, setPhotoUrl] = useState(null);
-  const photoInputRef = useRef(null);
-
-  useEffect(() => {
-    return () => {
-      // cleanup blob urls
-      if (photoUrl?.startsWith("blob:")) URL.revokeObjectURL(photoUrl);
-    };
-  }, [photoUrl]);
-
-  const onPickPhoto = (file) => {
-    if (!file) return;
-    if (photoUrl?.startsWith("blob:")) URL.revokeObjectURL(photoUrl);
-    const url = URL.createObjectURL(file);
-    setPhotoUrl(url);
-  };
-
-  const [videos, setVideos] = useState([]);
-  const [testimonials, setTestimonials] = useState([]);
-
-  const addVideoFiles = (files, setter) => {
-    if (!files || files.length === 0) return;
-    const next = [];
-    for (const f of Array.from(files)) {
-      const url = URL.createObjectURL(f);
-      next.push({
-        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        name: f.name,
-        url,
-      });
-    }
-    setter((prev) => [...prev, ...next]);
-  };
-
-  const removeVideo = (id, list, setter) => {
-    setter((prev) => {
-      const target = prev.find((x) => x.id === id);
-      if (target?.url?.startsWith("blob:")) URL.revokeObjectURL(target.url);
-      return prev.filter((x) => x.id !== id);
-    });
-  };
+  const greetingDone = stepIndex >= 1;
 
   const allText =
     (typedById.greeting || "") +
     (typedById.desc || "") +
     (typedById.bgHeader || "") +
-    (typedById.bgBody || "") +
-    (typedById.videoHeader || "") +
-    (typedById.testimonialHeader || "");
+    (typedById.bgBody || "");
 
-  // Determine where cursor should appear:
-  // It belongs at the end of the currently-typing step's text.
-  const cursorVisible = true;
+  // Hardcoded videos (must exist in /public)
+  const videos = [
+    { id: "v1", name: "Video 1", url: "/video1.mp4", type: "video/mp4" },
+    { id: "v2", name: "Video 2", url: "/video2.mp4", type: "video/mp4" },
+  ];
+
+  const testimonials = []; // add later
 
   return (
     <div className="page">
@@ -222,39 +144,29 @@ export default function App() {
           <div className="terminalText" aria-label="Typed introduction">
             <pre className="pre">
               {allText}
-              <Cursor visible={cursorVisible} />
+              <Cursor />
             </pre>
           </div>
 
-          <div className={"photoSlot" + (showPhoto ? " photoSlot--show" : "")}>
+          <div className={"photoSlot" + (greetingDone ? " photoSlot--show" : "")}>
             <div className="photoCard">
-              <div className="photoHeader">
-                <div className="photoTitle">Photo</div>
-              </div>
+              {/* You said you deleted the header on purpose — leaving it blank */}
+              <div className="photoHeader"></div>
+
               <div className="photoPreview">
-                <img className="photoImg" src="/joey.jpg" alt="Joey headshot" />
-            </div>
+                <img className="photoImg" src="/joey.png" alt="Joey headshot" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Carousels appear once their headers have been typed */}
-        <div className={"rails" + (typedById.videoHeader ? " rails--show" : "")}>
-          <VideoRail
-            title="Video Content"
-            videos={videos}
-            onAdd={(files) => addVideoFiles(files, setVideos)}
-            onRemove={(id) => removeVideo(id, videos, setVideos)}
-          />
+        {/* Always show these rails (no dependency on removed typewriter steps) */}
+        <div className="rails rails--show">
+          <VideoRail title="Video Content" videos={videos} />
         </div>
 
-        <div className={"rails" + (typedById.testimonialHeader ? " rails--show" : "")}>
-          <VideoRail
-            title="Client Testimonials"
-            videos={testimonials}
-            onAdd={(files) => addVideoFiles(files, setTestimonials)}
-            onRemove={(id) => removeVideo(id, testimonials, setTestimonials)}
-          />
+        <div className="rails rails--show">
+          <VideoRail title="Client Testimonials" videos={testimonials} />
         </div>
 
         <div className="footerHint">
