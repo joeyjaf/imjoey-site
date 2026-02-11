@@ -14,8 +14,8 @@ function useTypewriter(steps, { speedMs = 18, pauseMs = 500 } = {}) {
     if (!current) return;
 
     const isStepDone = charIndex >= current.text.length;
-
     let t;
+
     if (!isStepDone) {
       t = setTimeout(() => setCharIndex((c) => c + 1), speedMs);
     } else {
@@ -64,10 +64,7 @@ function VideoRail({ title, videos }) {
         <div className="rail" role="region" aria-label={`${title} carousel`}>
           {videos.map((v) => (
             <div key={v.id} className="videoCard">
-              <video className="video" controls preload="metadata">
-                <source src={v.url} type={v.type} />
-                Your browser does not support this video format.
-              </video>
+              <video className="video" src={v.url} controls preload="metadata" />
               <div className="videoMeta">
                 <div className="videoName" title={v.name}>{v.name}</div>
               </div>
@@ -108,7 +105,6 @@ export default function App() {
     `• # of Card Approvals: 130+\n` +
     `• Businesses Launched: 10+`;
 
-  // Type ONLY the intro + background (no duplicate video headers)
   const steps = useMemo(
     () => [
       { id: "greeting", text: greeting },
@@ -120,7 +116,6 @@ export default function App() {
   );
 
   const { typedById, stepIndex } = useTypewriter(steps, { speedMs: 14, pauseMs: 420 });
-
   const greetingDone = stepIndex >= 1;
 
   const allText =
@@ -129,10 +124,10 @@ export default function App() {
     (typedById.bgHeader || "") +
     (typedById.bgBody || "");
 
-  // Hardcoded videos (must exist in /public)
+  // MUST exist in /public
   const videos = [
-    { id: "v1", name: "Video 1", url: "/video1.mp4", type: "video/mp4" },
-    { id: "v2", name: "Video 2", url: "/video2.mp4", type: "video/mp4" },
+    { id: "v1", name: "Video 1", url: "/video1.mp4" },
+    { id: "v2", name: "Video 2", url: "/video2.mp4" },
   ];
 
   const testimonials = []; // add later
@@ -150,9 +145,7 @@ export default function App() {
 
           <div className={"photoSlot" + (greetingDone ? " photoSlot--show" : "")}>
             <div className="photoCard">
-              {/* You said you deleted the header on purpose — leaving it blank */}
               <div className="photoHeader"></div>
-
               <div className="photoPreview">
                 <img className="photoImg" src="/joey.png" alt="Joey headshot" />
               </div>
@@ -160,7 +153,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Always show these rails (no dependency on removed typewriter steps) */}
+        {/* Always render the sections (no hidden class logic) */}
         <div className="rails rails--show">
           <VideoRail title="Video Content" videos={videos} />
         </div>
