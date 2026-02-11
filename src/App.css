@@ -38,16 +38,7 @@ body {
 }
 
 .topRow {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 16px;
-  align-items: start;
-}
-
-@media (max-width: 900px) {
-  .topRow {
-    grid-template-columns: 1fr;
-  }
+  display: block;
 }
 
 .terminalText {
@@ -81,6 +72,9 @@ body {
 
 .photoSlot {
   width: 240px;
+  float: right;
+  margin-left: 16px;
+  margin-bottom: 12px;
   opacity: 0;
   transform: translateY(-6px);
   transition: opacity 260ms ease, transform 260ms ease;
@@ -94,8 +88,18 @@ body {
 }
 
 @media (max-width: 900px) {
-  .photoSlot { width: 100%; }
+  .photoSlot {
+    float: none;
+    width: 100%;
+    margin-left: 0;
+  }
 }
+
+.section,
+.footerHint {
+  clear: both;
+}
+
 
 .photoCard {
   border: 1px solid var(--border);
