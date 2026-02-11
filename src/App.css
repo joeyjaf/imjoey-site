@@ -325,3 +325,17 @@ body {
 }
 
 .muted { color: rgba(255,255,255,0.72); }
+
+@media (max-width: 900px) {
+  .photoPreview {
+    height: auto;
+    padding: 10px;
+  }
+
+  .photoImg {
+    height: auto;
+    max-height: 380px;
+    object-fit: contain;
+    background: #000;
+  }
+}
