@@ -5,7 +5,7 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-function useTypewriter(steps, { speedMs = 18, pauseMs = 500 } = {}) {
+function useTypewriter(steps, { speedMs = 25, pauseMs = 500 } = {}) {
   const [stepIndex, setStepIndex] = useState(0);
   const [charIndex, setCharIndex] = useState(0);
   const current = steps[stepIndex] || null;
