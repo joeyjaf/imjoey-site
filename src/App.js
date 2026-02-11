@@ -136,20 +136,19 @@ export default function App() {
     <div className="page">
       <div className="frame" role="main" aria-label="Joey personal site">
         <div className="topRow">
-          <div className="terminalText" aria-label="Typed introduction">
-            <pre className="pre">
-              {allText}
-              <Cursor />
-            </pre>
-          </div>
-
-          <div className={"photoSlot" + (greetingDone ? " photoSlot--show" : "")}>
-            <div className="photoCard">
-              <div className="photoHeader"></div>
-              <div className="photoPreview">
-                <img className="photoImg" src="/joey.png" alt="Joey headshot" />
-              </div>
-            </div>
+  <div className={"photoSlot" + (greetingDone ? " photoSlot--show" : "")}>
+    <div className="photoCard">
+      <div className="photoHeader"></div>
+      <div className="photoPreview">
+        <img className="photoImg" src="/joey.png" alt="Joey headshot" />
+      </div>
+    </div>
+  </div>
+  <div className="terminalText" aria-label="Typed introduction">
+    <pre className="pre">
+      {allText}
+      <Cursor />
+    </pre>
           </div>
         </div>
 
