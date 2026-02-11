@@ -230,31 +230,10 @@ export default function App() {
             <div className="photoCard">
               <div className="photoHeader">
                 <div className="photoTitle">Photo</div>
-                <button
-                  className="btn btn--ghost"
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                >
-                  Upload
-                </button>
-                <input
-                  ref={photoInputRef}
-                  className="hiddenInput"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => onPickPhoto(e.target.files?.[0])}
-                />
               </div>
               <div className="photoPreview">
-                {photoUrl ? (
-                  <img className="photoImg" src={photoUrl} alt="Joey headshot preview" />
-                ) : (
-                  <div className="photoPlaceholder">
-                    <div className="photoPlaceholderBox" />
-                    <div className="photoHint">Upload a headshot (JPG/PNG)</div>
-                  </div>
-                )}
-              </div>
+                <img className="photoImg" src="/joey.jpg" alt="Joey headshot" />
+            </div>
             </div>
           </div>
         </div>
