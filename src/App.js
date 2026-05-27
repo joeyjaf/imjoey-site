@@ -1,45 +1,16 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./App.css";
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function useTypewriter(steps, { speedMs = 14, pauseMs = 500 } = {}) {
-  const [stepIndex, setStepIndex] = useState(0);
+function useTypewriter(text, { speedMs = 14 } = {}) {
   const [charIndex, setCharIndex] = useState(0);
-  const current = steps[stepIndex] || null;
 
   useEffect(() => {
-    if (!current) return;
-
-    const isStepDone = charIndex >= current.text.length;
-    let t;
-
-    if (!isStepDone) {
-      t = setTimeout(() => setCharIndex((c) => c + 1), speedMs);
-    } else {
-      t = setTimeout(() => {
-        setStepIndex((i) => i + 1);
-        setCharIndex(0);
-      }, pauseMs);
-    }
-
+    if (charIndex >= text.length) return;
+    const t = setTimeout(() => setCharIndex((c) => c + 1), speedMs);
     return () => clearTimeout(t);
-  }, [current, charIndex, speedMs, pauseMs]);
+  }, [charIndex, text, speedMs]);
 
-  const typedById = useMemo(() => {
-    const map = {};
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i];
-      if (i < stepIndex) map[s.id] = s.text;
-      else if (i === stepIndex) map[s.id] = s.text.slice(0, clamp(charIndex, 0, s.text.length));
-      else map[s.id] = "";
-    }
-    return map;
-  }, [steps, stepIndex, charIndex]);
-
-  return { typedById, stepIndex };
+  return { typed: text.slice(0, charIndex), done: charIndex >= text.length };
 }
 
 function Cursor() {
@@ -79,7 +50,7 @@ function VideoRail({ title, videos }) {
 export default function App() {
   const greeting = `Hi, I'm Joey.`;
   const description =
-    `I work at Fragile, a company that powers hardware subscription programs for some of the world’s leading technology brands. ` +
+    `I work at Fragile, a company that powers hardware subscription programs for some of the world's leading technology brands. ` +
     `As Head of Risk, I oversee our entire risk and recovery function, leading strategy across underwriting, delinquency management, and loss mitigation. ` +
     `I design and implement data-driven systems that optimize account performance, streamline recovery operations, and proactively reduce exposure across our portfolio. ` +
     `My focus is on building scalable processes that protect unit economics while preserving customer relationships and long-term brand value.`;
@@ -105,24 +76,7 @@ export default function App() {
     `• # of Card Approvals: 130+\n` +
     `• Businesses Launched: 10+`;
 
-  const steps = useMemo(
-    () => [
-      { id: "greeting", text: greeting },
-      { id: "desc", text: "\n\n" + description },
-      { id: "bgHeader", text: "\n\n" + bgHeader },
-      { id: "bgBody", text: "\n\n" + bgBody },
-    ],
-    [greeting, description, bgHeader, bgBody]
-  );
-
-  const { typedById, stepIndex } = useTypewriter(steps, { speedMs: 14, pauseMs: 420 });
-  const greetingDone = stepIndex >= 1;
-
-  const allText =
-    (typedById.greeting || "") +
-    (typedById.desc || "") +
-    (typedById.bgHeader || "") +
-    (typedById.bgBody || "");
+  const { typed, done: greetingDone } = useTypewriter(greeting, { speedMs: 14 });
 
   // MUST exist in /public
   const videos = [
@@ -136,23 +90,29 @@ export default function App() {
     <div className="page">
       <div className="frame" role="main" aria-label="Joey personal site">
         <div className="topRow">
-  <div className={"photoSlot" + (greetingDone ? " photoSlot--show" : "")}>
-    <div className="photoCard">
-      <div className="photoHeader"></div>
-      <div className="photoPreview">
-        <img className="photoImg" src="/joey.png" alt="Joey headshot" />
-      </div>
-    </div>
-  </div>
-  <div className="terminalText" aria-label="Typed introduction">
-    <pre className="pre">
-      {allText}
-      <Cursor />
-    </pre>
+          <div className={"photoSlot" + (greetingDone ? " photoSlot--show" : "")}>
+            <div className="photoCard">
+              <div className="photoHeader"></div>
+              <div className="photoPreview">
+                <img className="photoImg" src="/joey.png" alt="Joey headshot" />
+              </div>
+            </div>
+          </div>
+          <div className="terminalText" aria-label="Typed introduction">
+            <pre className="pre">
+              {typed}
+              {!greetingDone && <Cursor />}
+            </pre>
+            {greetingDone && (
+              <div className="fadeIn">
+                <p className="bodyText">{description}</p>
+                <p className="bodyText bodyText--header">{bgHeader}</p>
+                <pre className="pre bodyText">{bgBody}</pre>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Always render the sections (no hidden class logic) */}
         <div className="rails rails--show">
           <VideoRail title="Video Content" videos={videos} />
         </div>
@@ -162,7 +122,7 @@ export default function App() {
         </div>
 
         <div className="footerHint">
-          <span className="muted">Tip:</span> This page is intentionally “terminal-like” with a bordered frame and typed reveal.
+          <span className="muted">Tip:</span> This page is intentionally "terminal-like" with a bordered frame and typed reveal.
         </div>
       </div>
     </div>

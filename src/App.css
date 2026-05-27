@@ -339,3 +339,27 @@ body {
     background: #000;
   }
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fadeIn {
+  animation: fadeIn 300ms ease forwards;
+}
+
+.bodyText {
+  margin: 16px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+  font-size: 16px;
+  letter-spacing: 0.1px;
+  font-family: inherit;
+}
+
+.bodyText--header {
+  font-weight: 650;
+  margin-top: 24px;
+}
