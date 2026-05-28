@@ -77,6 +77,37 @@ function SkillCard({ name, src, icon, delay = 0 }) {
   );
 }
 
+function VideoCard({ url, thumb }) {
+  const [playing, setPlaying] = useState(false);
+  return (
+    <div
+      className={`video-card${playing ? " video-card--playing" : ""}`}
+      onClick={() => !playing && setPlaying(true)}
+      role={playing ? undefined : "button"}
+      tabIndex={playing ? undefined : 0}
+      onKeyDown={(e) => {
+        if (!playing && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          setPlaying(true);
+        }
+      }}
+    >
+      {playing ? (
+        <video className="video-player" src={url} controls autoPlay />
+      ) : (
+        <div className="video-poster">
+          <div className="video-poster-icon">{thumb}</div>
+          <div className="video-play-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatCard({ value, label, delay = 0 }) {
   const [ref, inView] = useInView(0.1);
   return (
@@ -117,6 +148,81 @@ export default function App() {
   const { typed, done: nameDone } = useTypewriter(heroName, { speedMs: 90, startDelay: 700 });
   const [descRef, descInView] = useInView(0.08);
 
+  const wavePathsRef = useRef([null, null, null, null]);
+
+  useEffect(() => {
+    const samples = 80;
+    const startX = -200;
+    const endX = 1640;
+    const step = (endX - startX) / samples;
+
+    // baseAmp: amplitude at rest (very small — barely a wave)
+    // energyAmp: extra amplitude added when scroll energy is at max
+    // timeSpeed: continuous phase drift per second (always alive, but gentle)
+    // scrollSpeed: phase shift per scroll px
+    const waveConfigs = [
+      { baseAmp: 3, energyAmp: 14, freq: 0.0050, scrollSpeed:  0.010, timeSpeed: 0.40 },
+      { baseAmp: 4, energyAmp: 20, freq: 0.0080, scrollSpeed: -0.014, timeSpeed: 0.55 },
+      { baseAmp: 5, energyAmp: 24, freq: 0.0040, scrollSpeed:  0.018, timeSpeed: 0.35 },
+      { baseAmp: 6, energyAmp: 30, freq: 0.0070, scrollSpeed: -0.012, timeSpeed: 0.48 },
+    ];
+
+    const buildPath = (phase, amp, freq) => {
+      let d = "";
+      for (let i = 0; i <= samples; i++) {
+        const x = startX + i * step;
+        const y = 100 + amp * Math.sin(freq * (x - startX) + phase);
+        d += (i === 0 ? "M" : " L") + x.toFixed(1) + " " + y.toFixed(1);
+      }
+      return d;
+    };
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    let energy = 0;
+    let scrollPhase = 0;
+    let timePhase = 0;
+    let lastY = window.scrollY;
+    let lastFrame = performance.now();
+    let rafId = 0;
+
+    const onScroll = () => {
+      if (reduceMotion) return;
+      const curY = window.scrollY;
+      const delta = curY - lastY;
+      scrollPhase += delta;
+      // ramp energy with scroll magnitude, clamped
+      energy = Math.min(1, energy + Math.abs(delta) * 0.012);
+      lastY = curY;
+    };
+
+    const frame = (now) => {
+      const dt = Math.min(0.06, (now - lastFrame) / 1000);
+      lastFrame = now;
+      timePhase += dt;
+      // energy decays toward 0 (~0.7s to fall from full)
+      energy = Math.max(0, energy - dt * 1.4);
+
+      for (let i = 0; i < wavePathsRef.current.length; i++) {
+        const p = wavePathsRef.current[i];
+        if (!p) continue;
+        const cfg = waveConfigs[i];
+        const phase = scrollPhase * cfg.scrollSpeed + timePhase * cfg.timeSpeed;
+        const amp = cfg.baseAmp + energy * cfg.energyAmp;
+        p.setAttribute("d", buildPath(phase, amp, cfg.freq));
+      }
+      rafId = requestAnimationFrame(frame);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    rafId = requestAnimationFrame(frame);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   const MerchantSuccessIcon = (
     <svg className="skill-logo-img" viewBox="0 0 24 24" fill="none"
       stroke="rgba(255,255,255,0.85)" strokeWidth="1.5"
@@ -143,9 +249,35 @@ export default function App() {
     { name: "Merchant Success", icon: MerchantSuccessIcon },
   ];
 
+  const WifiIcon = (
+    <svg className="skill-logo-img" viewBox="0 0 24 24" fill="none"
+      stroke="rgba(255,255,255,0.85)" strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 8.82a15 15 0 0 1 20 0" />
+      <path d="M5 12.859a10 10 0 0 1 14 0" />
+      <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+      <circle cx="12" cy="20" r="1" fill="rgba(255,255,255,0.85)" stroke="none" />
+    </svg>
+  );
+
+  const MountainIcon = (
+    <svg className="skill-logo-img" viewBox="0 0 24 24" fill="none">
+      <defs>
+        <linearGradient id="mountainWhiteBlack" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,1)" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M2 18 L6 5 L9 11 L12 3 L15 11 L18 5 L22 18 L12 22 Z"
+        fill="url(#mountainWhiteBlack)"
+      />
+    </svg>
+  );
+
   const videos = [
-    { id: "v1", name: "Video 1", url: "/video1.mp4" },
-    { id: "v2", name: "Video 2", url: "/video2.mp4" },
+    { id: "v1", url: "/video1.mp4", thumb: WifiIcon },
+    { id: "v2", url: "/video2.mp4", thumb: MountainIcon },
   ];
 
   const roles = [
@@ -204,6 +336,57 @@ export default function App() {
       <div className="bg-orb bg-orb--1" aria-hidden="true" />
       <div className="bg-orb bg-orb--2" aria-hidden="true" />
       <div className="bg-orb bg-orb--3" aria-hidden="true" />
+
+      <div className="bg-waves" aria-hidden="true">
+        <div className="wave-layer wave-layer--1">
+          <svg viewBox="0 0 1440 200" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="wg1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#7c3aed" stopOpacity="0" />
+                <stop offset="50%" stopColor="#7c3aed" stopOpacity="1" />
+                <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path ref={(el) => { wavePathsRef.current[0] = el; }} d="" stroke="url(#wg1)" />
+          </svg>
+        </div>
+        <div className="wave-layer wave-layer--2">
+          <svg viewBox="0 0 1440 200" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="wg2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#a855f7" stopOpacity="0" />
+                <stop offset="50%" stopColor="#a855f7" stopOpacity="1" />
+                <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path ref={(el) => { wavePathsRef.current[1] = el; }} d="" stroke="url(#wg2)" />
+          </svg>
+        </div>
+        <div className="wave-layer wave-layer--3">
+          <svg viewBox="0 0 1440 200" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="wg3" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#7c3aed" stopOpacity="0" />
+                <stop offset="50%" stopColor="#7c3aed" stopOpacity="1" />
+                <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path ref={(el) => { wavePathsRef.current[2] = el; }} d="" stroke="url(#wg3)" />
+          </svg>
+        </div>
+        <div className="wave-layer wave-layer--4">
+          <svg viewBox="0 0 1440 200" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="wg4" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#a855f7" stopOpacity="0" />
+                <stop offset="50%" stopColor="#a855f7" stopOpacity="1" />
+                <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path ref={(el) => { wavePathsRef.current[3] = el; }} d="" stroke="url(#wg4)" />
+          </svg>
+        </div>
+      </div>
 
       {/* HERO */}
       <section className="hero">
@@ -284,18 +467,46 @@ export default function App() {
           <p className="section-tag">Video Content</p>
           <div className="video-rail">
             {videos.map((v) => (
-              <div key={v.id} className="video-card">
-                <video
-                  className="video-player"
-                  src={v.url}
-                  controls
-                  preload="metadata"
-                />
-                <div className="video-meta">
-                  <span className="video-name">{v.name}</span>
-                </div>
-              </div>
+              <VideoCard key={v.id} url={v.url} thumb={v.thumb} />
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CONNECT */}
+      <section className="section">
+        <div className="section-inner">
+          <p className="section-tag">Connect With Joey</p>
+          <div className="connect-grid">
+            <a
+              className="connect-card"
+              href="https://www.linkedin.com/in/josephfraser/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="LinkedIn"
+            >
+              <svg
+                className="connect-logo"
+                viewBox="0 0 24 24"
+                fill="rgba(255,255,255,0.88)"
+                aria-hidden="true"
+              >
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.852 3.37-1.852 3.601 0 4.267 2.37 4.267 5.455v6.288zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+              </svg>
+              <span className="connect-label">LinkedIn</span>
+            </a>
+            <a
+              className="connect-card"
+              href="mailto:connect@imjoey.me"
+              aria-label="Email connect@imjoey.me"
+            >
+              <img
+                src="https://cdn.simpleicons.org/gmail/ffffff"
+                alt=""
+                className="connect-logo"
+              />
+              <span className="connect-label">Email</span>
+            </a>
           </div>
         </div>
       </section>

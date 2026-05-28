@@ -31,9 +31,43 @@ body {
 }
 
 /* ═══════════════════════════════════════════════
-   ANIMATED BACKGROUND ORBS
+   ANIMATED BACKGROUND ORBS + WAVES
 ═══════════════════════════════════════════════ */
 .site { position: relative; }
+
+.bg-waves {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.wave-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 220px;
+}
+
+.wave-layer svg {
+  display: block;
+  width: 120%;
+  height: 100%;
+  margin-left: -10%;
+}
+
+.wave-layer path {
+  fill: none;
+  stroke-width: 22;
+  vector-effect: non-scaling-stroke;
+  filter: blur(1.4px);
+}
+
+.wave-layer--1 { top: 12%; opacity: 0.10; }
+.wave-layer--2 { top: 36%; opacity: 0.08; }
+.wave-layer--3 { top: 62%; opacity: 0.10; }
+.wave-layer--4 { top: 84%; opacity: 0.13; }
 
 .bg-orb {
   position: fixed;
@@ -501,25 +535,12 @@ body {
    VIDEO RAIL
 ═══════════════════════════════════════════════ */
 .video-rail {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  padding: 4px 2px 16px;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(124,58,237,0.36) transparent;
-}
-.video-rail::-webkit-scrollbar { height: 4px; }
-.video-rail::-webkit-scrollbar-thumb {
-  background: rgba(124,58,237,0.36);
-  border-radius: 999px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
 }
 
 .video-card {
-  min-width: 350px;
-  max-width: 400px;
-  flex-shrink: 0;
-  scroll-snap-align: start;
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -531,21 +552,103 @@ body {
   box-shadow: 0 0 34px var(--glow-s);
 }
 
+.video-card {
+  cursor: pointer;
+}
+
 .video-player {
   width: 100%;
-  height: 210px;
+  aspect-ratio: 16 / 9;
   background: #000;
   display: block;
 }
 
-.video-meta {
-  padding: 14px 16px;
-  border-top: 1px solid var(--border);
+.video-poster {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
 }
 
-.video-name {
+.video-poster-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-poster-icon .skill-logo-img {
+  width: 56px;
+  height: 56px;
+}
+
+.video-play-badge {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(124,58,237,0.18);
+  border: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.85);
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.video-card:hover .video-play-badge {
+  background: rgba(124,58,237,0.32);
+  transform: scale(1.06);
+}
+
+/* ═══════════════════════════════════════════════
+   CONNECT
+═══════════════════════════════════════════════ */
+.connect-grid {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.connect-card {
+  width: 160px;
+  height: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 250ms ease, box-shadow 250ms ease, transform 250ms ease;
+}
+.connect-card:hover {
+  border-color: var(--border2);
+  box-shadow: 0 0 34px var(--glow-s);
+  transform: translateY(-2px);
+}
+
+.connect-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  opacity: 0.88;
+}
+
+.connect-label {
   font-size: 13px;
-  color: rgba(255,255,255,0.70);
+  color: var(--muted);
+  letter-spacing: 0.02em;
 }
 
 /* ═══════════════════════════════════════════════
@@ -624,7 +727,7 @@ body {
   .role-number { font-size: 30px; min-width: auto; }
   .role-title { font-size: 18px; }
 
-  .video-card { min-width: 280px; }
+  .video-rail { grid-template-columns: 1fr; }
 
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .skills-grid { grid-template-columns: repeat(3, 1fr); }
