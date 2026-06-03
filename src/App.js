@@ -517,6 +517,10 @@ export default function App() {
           <span className="footer-name">Joey Fraser</span>
           <span className="footer-rule" aria-hidden="true" />
           <span className="footer-url">imjoey.me</span>
+          <span className="footer-rule" aria-hidden="true" />
+          <a className="footer-url" href="/about">About</a>
+          <span className="footer-rule" aria-hidden="true" />
+          <a className="footer-url" href="/press">Press</a>
         </div>
       </footer>
     </div>
