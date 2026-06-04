@@ -1,10 +1,10 @@
 {
-  "fetchedAt": "2026-06-04T21:57:36.094Z",
+  "fetchedAt": "2026-06-04T22:01:12.632Z",
   "projects": [
     {
       "name": "noah-carl-resume",
       "url": "https://noah-carl-resume.vercel.app",
-      "updated": "4h",
+      "updated": "5h",
       "shot": "/projects-shots/noah-carl-resume.png"
     },
     {
