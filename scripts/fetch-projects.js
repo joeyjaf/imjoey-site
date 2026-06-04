@@ -13,6 +13,12 @@ const path = require("path");
 const OUT = path.join(__dirname, "..", "public", "projects.json");
 const SHOTS_DIR = path.join(__dirname, "..", "public", "projects-shots");
 
+// Override the Vercel-reported URL for projects that have a custom domain we'd
+// rather feature on imjoey.me. Keyed by Vercel project name (slug).
+const URL_OVERRIDES = {
+  "100-things": "https://www.ahundredthings.com",
+};
+
 function parseTable(text) {
   // strip CLI banner / warnings — keep only lines that look like a row
   const lines = text.split("\n").map((l) => l.replace(/\s+$/, ""));
@@ -59,7 +65,8 @@ function main() {
   const projects = parseTable(raw).map((p) => {
     const shotFile = path.join(SHOTS_DIR, `${p.name}.png`);
     const shotRel = `/projects-shots/${p.name}.png`;
-    return { ...p, shot: fs.existsSync(shotFile) ? shotRel : null };
+    const url = URL_OVERRIDES[p.name] || p.url;
+    return { ...p, url, shot: fs.existsSync(shotFile) ? shotRel : null };
   });
 
   const payload = { fetchedAt: new Date().toISOString(), projects };
