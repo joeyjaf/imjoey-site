@@ -1,5 +1,5 @@
 {
-  "fetchedAt": "2026-06-04T21:46:31.956Z",
+  "fetchedAt": "2026-06-04T21:57:36.094Z",
   "projects": [
     {
       "name": "noah-carl-resume",
@@ -15,7 +15,7 @@
     },
     {
       "name": "100-things",
-      "url": "https://100-things-one.vercel.app",
+      "url": "https://www.ahundredthings.com",
       "updated": "2d",
       "shot": "/projects-shots/100-things.png"
     },
