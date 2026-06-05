@@ -2,66 +2,6 @@
   "fetchedAt": "2026-06-05T17:48:41.790Z",
   "projects": [
     {
-      "name": "aht-price-builder",
-      "url": "https://aht-price-builder.vercel.app",
-      "updated": "12h",
-      "shot": null
-    },
-    {
-      "name": "food-guys-proposal",
-      "url": "https://food-guys-proposal.vercel.app",
-      "updated": "14h",
-      "shot": null
-    },
-    {
-      "name": "food-guys-mockup",
-      "url": "https://food-guys-mockup.vercel.app",
-      "updated": "14h",
-      "shot": null
-    },
-    {
-      "name": "question-mark-mockup",
-      "url": "https://question-mark-mockup.vercel.app",
-      "updated": "15h",
-      "shot": null
-    },
-    {
-      "name": "question-mark-proposal",
-      "url": "https://question-mark-proposal.vercel.app",
-      "updated": "15h",
-      "shot": null
-    },
-    {
-      "name": "jj-window-wash-proposal",
-      "url": "https://jj-window-wash-proposal.vercel.app",
-      "updated": "18h",
-      "shot": null
-    },
-    {
-      "name": "jj-window-wash-mockup",
-      "url": "https://jj-window-wash-mockup.vercel.app",
-      "updated": "18h",
-      "shot": null
-    },
-    {
-      "name": "keen-impact-proposal",
-      "url": "https://keen-impact-proposal.vercel.app",
-      "updated": "18h",
-      "shot": null
-    },
-    {
-      "name": "keen-impact-mockup",
-      "url": "https://keen-impact-mockup.vercel.app",
-      "updated": "18h",
-      "shot": null
-    },
-    {
-      "name": "charlottes-web-of-designs",
-      "url": "https://charlottes-web-of-designs.vercel.app",
-      "updated": "19h",
-      "shot": null
-    },
-    {
       "name": "noah-carl-resume",
       "url": "https://noah-carl-resume.vercel.app",
       "updated": "1d",
