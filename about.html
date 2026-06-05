@@ -24,6 +24,7 @@
   <meta name="twitter:image" content="https://imjoey.me/joey.png" />
 
   <link rel="icon" href="https://imjoey.me/favicon.png" />
+  <link rel="preload" as="image" href="https://imjoey.me/joey.webp" type="image/webp" fetchpriority="high" />
 
   <!-- Person schema — the core entity signal -->
   <script type="application/ld+json">
@@ -170,7 +171,10 @@
 <body>
 <main>
   <header>
-    <img src="https://imjoey.me/joey.png" alt="Joey Fraser headshot" width="120" height="120" />
+    <picture>
+      <source srcset="https://imjoey.me/joey.webp" type="image/webp" />
+      <img src="https://imjoey.me/joey.png" alt="Joey Fraser headshot" width="120" height="120" fetchpriority="high" />
+    </picture>
     <div>
       <h1>Joey Fraser</h1>
       <p class="role">Head of Risk Operations · Fragile</p>

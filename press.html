@@ -10,6 +10,8 @@
   <meta property="og:image" content="https://imjoey.me/joey.png" />
   <meta property="og:url" content="https://imjoey.me/press" />
   <meta name="robots" content="index, follow" />
+  <link rel="icon" href="https://imjoey.me/favicon.png" />
+  <link rel="preload" as="image" href="https://imjoey.me/joey.webp" type="image/webp" fetchpriority="high" />
 
   <script type="application/ld+json">
   {
@@ -53,7 +55,10 @@
 <body>
 <main>
   <header>
-    <img src="https://imjoey.me/joey.png" alt="Joey Fraser headshot" width="120" height="120" />
+    <picture>
+      <source srcset="https://imjoey.me/joey.webp" type="image/webp" />
+      <img src="https://imjoey.me/joey.png" alt="Joey Fraser headshot" width="120" height="120" fetchpriority="high" />
+    </picture>
     <div>
       <h1>Joey Fraser</h1>
       <p class="role">Head of Risk Operations · Fragile</p>
