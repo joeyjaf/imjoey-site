@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/static/css/main.135182c4.css",
-    "main.js": "/static/js/main.11535873.js",
-    "static/js/453.0ddd8556.chunk.js": "/static/js/453.0ddd8556.chunk.js",
-    "index.html": "/index.html",
-    "main.135182c4.css.map": "/static/css/main.135182c4.css.map",
-    "main.11535873.js.map": "/static/js/main.11535873.js.map",
-    "453.0ddd8556.chunk.js.map": "/static/js/453.0ddd8556.chunk.js.map"
+    "main.css": "https://imjoey.me/static/css/main.135182c4.css",
+    "main.js": "https://imjoey.me/static/js/main.16261d28.js",
+    "static/js/453.0ddd8556.chunk.js": "https://imjoey.me/static/js/453.0ddd8556.chunk.js",
+    "index.html": "https://imjoey.me/index.html",
+    "main.135182c4.css.map": "https://imjoey.me/static/css/main.135182c4.css.map",
+    "main.16261d28.js.map": "https://imjoey.me/static/js/main.16261d28.js.map",
+    "453.0ddd8556.chunk.js.map": "https://imjoey.me/static/js/453.0ddd8556.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.135182c4.css",
-    "static/js/main.11535873.js"
+    "static/js/main.16261d28.js"
   ]
 }
