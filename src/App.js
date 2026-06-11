@@ -1,25 +1,51 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import "./App.css";
+
+const CAN_HOVER =
+  typeof window !== "undefined" &&
+  window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+const REDUCED_MOTION =
+  typeof window !== "undefined" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* ─────────────────────────────────────────────
    HOOKS
 ───────────────────────────────────────────── */
-function useTypewriter(text, { speedMs = 88, startDelay = 800 } = {}) {
-  const [charIndex, setCharIndex] = useState(0);
-  const [started, setStarted] = useState(false);
+function useDecodeText(text, { startDelay = 700, stepMs = 58, lookahead = 3 } = {}) {
+  const [out, setOut] = useState("");
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setStarted(true), startDelay);
-    return () => clearTimeout(t);
-  }, [startDelay]);
+    if (REDUCED_MOTION) {
+      setOut(text);
+      setDone(true);
+      return;
+    }
+    const GLYPHS = "<>/\\|=+*#%?!10{}[]$&";
+    let p = 0;
+    let interval;
+    const t = setTimeout(() => {
+      interval = setInterval(() => {
+        p++;
+        if (p >= text.length) {
+          setOut(text);
+          setDone(true);
+          clearInterval(interval);
+          return;
+        }
+        const scrambleLen = Math.min(lookahead, text.length - p);
+        let scramble = "";
+        for (let i = 0; i < scrambleLen; i++) {
+          scramble += GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+        }
+        setOut(text.slice(0, p) + scramble);
+      }, stepMs);
+    }, startDelay);
+    return () => { clearTimeout(t); clearInterval(interval); };
+  }, [text, startDelay, stepMs, lookahead]);
 
-  useEffect(() => {
-    if (!started || charIndex >= text.length) return;
-    const t = setTimeout(() => setCharIndex((c) => c + 1), speedMs);
-    return () => clearTimeout(t);
-  }, [charIndex, text, speedMs, started]);
-
-  return { typed: text.slice(0, charIndex), done: charIndex >= text.length };
+  return { typed: out, done };
 }
 
 function useInView(threshold = 0.12) {
@@ -86,7 +112,155 @@ function useActiveSection(ids) {
 }
 
 /* ─────────────────────────────────────────────
-   PRIMITIVES
+   INTERACTION PRIMITIVES
+───────────────────────────────────────────── */
+function TiltCard({
+  children, className = "", max = 6, as: Tag = "div",
+  onMouseMove: extMove, onMouseLeave: extLeave, ...rest
+}) {
+  const ref = useRef(null);
+
+  const onMove = (e) => {
+    if (CAN_HOVER) {
+      const el = ref.current;
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width;
+        const py = (e.clientY - r.top) / r.height;
+        el.style.setProperty("--rx", `${((0.5 - py) * max).toFixed(2)}deg`);
+        el.style.setProperty("--ry", `${((px - 0.5) * max).toFixed(2)}deg`);
+        el.style.setProperty("--mx", `${(px * 100).toFixed(1)}%`);
+        el.style.setProperty("--my", `${(py * 100).toFixed(1)}%`);
+      }
+    }
+    extMove?.(e);
+  };
+
+  const onLeave = (e) => {
+    const el = ref.current;
+    if (el) {
+      el.style.setProperty("--rx", "0deg");
+      el.style.setProperty("--ry", "0deg");
+    }
+    extLeave?.(e);
+  };
+
+  return (
+    <Tag
+      ref={ref}
+      className={`tilt ${className}`}
+      {...rest}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+function Magnetic({ children, className = "", strength = 0.22 }) {
+  const ref = useRef(null);
+
+  const onMove = (e) => {
+    if (!CAN_HOVER || REDUCED_MOTION) return;
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2);
+    const dy = e.clientY - (r.top + r.height / 2);
+    el.style.transform = `translate(${(dx * strength).toFixed(1)}px, ${(dy * strength).toFixed(1)}px)`;
+  };
+
+  const onLeave = () => {
+    const el = ref.current;
+    if (el) el.style.transform = "";
+  };
+
+  return (
+    <div ref={ref} className={`magnetic ${className}`} onMouseMove={onMove} onMouseLeave={onLeave}>
+      {children}
+    </div>
+  );
+}
+
+function CursorGlow() {
+  const dotRef = useRef(null);
+  const ringRef = useRef(null);
+
+  useEffect(() => {
+    if (!CAN_HOVER || REDUCED_MOTION) return;
+    const dot = dotRef.current;
+    const ring = ringRef.current;
+    let mx = -100, my = -100;
+    let rx = -100, ry = -100;
+    let hot = false;
+    let rafId = 0;
+
+    const onMove = (e) => {
+      mx = e.clientX;
+      my = e.clientY;
+      const t = e.target;
+      hot = !!(t.closest && t.closest("a, button, [role='button'], .tilt, .orbit-node"));
+    };
+
+    const frame = () => {
+      rx += (mx - rx) * 0.16;
+      ry += (my - ry) * 0.16;
+      dot.style.transform = `translate(${mx}px, ${my}px)`;
+      ring.style.transform = `translate(${rx}px, ${ry}px) scale(${hot ? 1.9 : 1})`;
+      ring.style.opacity = hot ? "0.9" : "0.5";
+      rafId = requestAnimationFrame(frame);
+    };
+
+    window.addEventListener("mousemove", onMove, { passive: true });
+    rafId = requestAnimationFrame(frame);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  if (!CAN_HOVER || REDUCED_MOTION) return null;
+  return (
+    <>
+      <div ref={dotRef} className="cursor-dot" aria-hidden="true" />
+      <div ref={ringRef} className="cursor-ring" aria-hidden="true" />
+    </>
+  );
+}
+
+function CountUp({ value, duration = 1600 }) {
+  const [ref, inView] = useInView(0.5);
+  const parts = useMemo(() => {
+    const m = String(value).match(/^([^\d]*)([\d.]+)(.*)$/);
+    if (!m) return null;
+    return { prefix: m[1], num: parseFloat(m[2]), decimals: m[2].includes(".") ? 1 : 0, suffix: m[3] };
+  }, [value]);
+  const [disp, setDisp] = useState(() =>
+    parts && !REDUCED_MOTION ? `${parts.prefix}0${parts.suffix}` : value
+  );
+
+  useEffect(() => {
+    if (!inView || !parts || REDUCED_MOTION) return;
+    let rafId = 0;
+    const t0 = performance.now();
+    const frame = (now) => {
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const cur = parts.num * eased;
+      setDisp(`${parts.prefix}${cur.toFixed(parts.decimals)}${parts.suffix}`);
+      if (p < 1) rafId = requestAnimationFrame(frame);
+      else setDisp(value);
+    };
+    rafId = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(rafId);
+  }, [inView, parts, value, duration]);
+
+  return <span ref={ref}>{disp}</span>;
+}
+
+/* ─────────────────────────────────────────────
+   CONTENT PRIMITIVES
 ───────────────────────────────────────────── */
 function GlowCursor({ done }) {
   return (
@@ -104,49 +278,278 @@ function SkillLogo({ src, name }) {
   );
 }
 
-function SkillCard({ name, src, icon, delay = 0 }) {
+/* ── ABOUT: scroll-driven word reveal ── */
+const ABOUT_SEGMENTS = [
+  { t: "I work at " },
+  { t: "Fragile,", a: true },
+  { t: " a company that powers hardware subscription programs for some of the world's leading technology brands. As " },
+  { t: "Head of Risk,", a: true },
+  { t: " I oversee our entire risk and recovery function, leading strategy across underwriting, delinquency management, and loss mitigation. I design and implement data-driven systems that optimize account performance, streamline recovery operations, and proactively reduce exposure across our portfolio. My focus is on building scalable processes that protect unit economics while preserving customer relationships and long-term brand value." },
+];
+
+function AboutReveal() {
+  const words = useMemo(() => {
+    const out = [];
+    for (const seg of ABOUT_SEGMENTS) {
+      for (const w of seg.t.split(/\s+/)) {
+        if (w) out.push({ t: w, a: !!seg.a });
+      }
+    }
+    return out;
+  }, []);
+
+  const ref = useRef(null);
+  const [lit, setLit] = useState(REDUCED_MOTION ? words.length : 0);
+
+  useEffect(() => {
+    if (REDUCED_MOTION) return;
+    const el = ref.current;
+    if (!el) return;
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const p = Math.min(1, Math.max(0, (vh * 0.86 - r.top) / (r.height + vh * 0.30)));
+      setLit(Math.round(p * words.length));
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [words.length]);
+
+  return (
+    <p ref={ref} className="about-text" aria-label={ABOUT_SEGMENTS.map(s => s.t).join("")}>
+      {words.map((w, i) => (
+        <span
+          key={i}
+          aria-hidden="true"
+          className={`aw${i < lit ? " aw--on" : ""}${w.a ? " aw--accent" : ""}`}
+        >
+          {w.t}{" "}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+/* ── stat card with sparkline ── */
+function StatCard({ value, label, spark, delay = 0 }) {
   const [ref, inView] = useInView(0.1);
   return (
     <div
       ref={ref}
-      className={`skill-card${inView ? " skill-card--show" : ""}`}
+      className={`stat-slot${inView ? " stat-slot--show" : ""}`}
       style={{ transitionDelay: `${delay}ms` }}
     >
-      <div className="skill-logo-wrap">{icon ?? <SkillLogo src={src} name={name} />}</div>
-      <div className="skill-name">{name}</div>
+      <TiltCard className="stat-card" max={7}>
+        <div className="stat-value"><CountUp value={value} /></div>
+        <div className="stat-label">{label}</div>
+        <svg className="stat-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id={`sg-${label.replace(/\W/g, "")}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#7c3aed" stopOpacity="0.1" />
+              <stop offset="1" stopColor="#c084fc" stopOpacity="0.9" />
+            </linearGradient>
+          </defs>
+          <polyline
+            points={spark}
+            fill="none"
+            stroke={`url(#sg-${label.replace(/\W/g, "")})`}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={inView ? "stat-spark-line stat-spark-line--draw" : "stat-spark-line"}
+          />
+        </svg>
+        <span className="stat-corner" aria-hidden="true" />
+      </TiltCard>
     </div>
   );
 }
 
-function SkillCategory({ label, items, baseDelay = 0 }) {
-  const [ref, inView] = useInView(0.05);
+/* ─────────────────────────────────────────────
+   SKILLS — filter console + disc grid
+───────────────────────────────────────────── */
+function SkillNode({ s, dim, hot }) {
   return (
     <div
-      ref={ref}
-      className={`skill-category${inView ? " skill-category--show" : ""}`}
+      className={`orbit-node${dim ? " orbit-node--dim" : ""}${hot ? " orbit-node--hot" : ""}`}
+      style={{ "--node-accent": s.color }}
     >
-      <div className="skill-category-head">
-        <span className="skill-category-tick" aria-hidden="true" />
-        <span className="skill-category-label">{label}</span>
-        <span className="skill-category-count">{String(items.length).padStart(2, "0")}</span>
+      <span className="orbit-node-disc">
+        <span className="orbit-node-icon">
+          {s.icon ?? <SkillLogo src={s.src} name={s.name} />}
+        </span>
+      </span>
+      <span className="orbit-node-label">{s.name}</span>
+    </div>
+  );
+}
+
+function SkillsConsole({ categories }) {
+  const [active, setActive] = useState("all");
+  const [ref, inView] = useInView(0.05);
+
+  const flat = useMemo(
+    () => categories.flatMap((c) => c.items.map((it) => ({ ...it, cat: c.key, color: c.color }))),
+    [categories]
+  );
+  const total = flat.length;
+  const activeCat = categories.find((c) => c.key === active);
+  const shown = active === "all" ? total : activeCat.items.length;
+  const isDim = (s) => active !== "all" && s.cat !== active;
+  const isHot = (s) => active !== "all" && s.cat === active;
+
+  return (
+    <div ref={ref} className={`orbit-wrap${inView ? " orbit-wrap--show" : ""}`}>
+      <div className="orbit-console">
+        <div className="orbit-filters" aria-label="Filter skills by category">
+          <button
+            type="button"
+            className={`orbit-filter${active === "all" ? " orbit-filter--active" : ""}`}
+            aria-pressed={active === "all"}
+            onClick={() => setActive("all")}
+            style={{ "--f-accent": "#a855f7" }}
+          >
+            <span className="orbit-filter-dot" aria-hidden="true" />
+            All systems
+            <span className="orbit-filter-count">{String(total).padStart(2, "0")}</span>
+          </button>
+          {categories.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              className={`orbit-filter${active === c.key ? " orbit-filter--active" : ""}`}
+              aria-pressed={active === c.key}
+              onClick={() => setActive(active === c.key ? "all" : c.key)}
+              style={{ "--f-accent": c.color }}
+            >
+              <span className="orbit-filter-dot" aria-hidden="true" />
+              {c.label}
+              <span className="orbit-filter-count">{String(c.items.length).padStart(2, "0")}</span>
+            </button>
+          ))}
+        </div>
+        <div className="orbit-readout" aria-hidden="true">
+          <span className="orbit-readout-prompt">$</span>
+          {" scan --module=\""}
+          {active === "all" ? "all" : activeCat.label.toLowerCase()}
+          {"\" → "}
+          <span className="orbit-readout-result">{String(shown).padStart(2, "0")}/{total} online</span>
+        </div>
       </div>
-      <div className="skills-grid">
-        {items.map((s, i) => (
-          <SkillCard key={s.name} {...s} delay={baseDelay + i * 40} />
+
+      <div className="skills-deck">
+        {flat.map((s) => (
+          <SkillNode key={s.name} s={s} dim={isDim(s)} hot={isHot(s)} />
         ))}
       </div>
     </div>
   );
 }
 
+/* ─────────────────────────────────────────────
+   WORK — drawing timeline
+───────────────────────────────────────────── */
+function RoleCard({ number, title, subtitle, meta, bullets, delay = 0 }) {
+  const [ref, inView] = useInView(0.08);
+  return (
+    <div
+      ref={ref}
+      className={`role-slot${inView ? " role-slot--show" : ""}`}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      <div className="role-rail" aria-hidden="true">
+        <span className="role-rail-dot" />
+      </div>
+      <TiltCard className="role-card" max={0}>
+        <span className="role-beam" aria-hidden="true" />
+        <div className="role-number" aria-hidden="true">{number}</div>
+        <div className="role-content">
+          <div className="role-head">
+            <h2 className="role-title">{title}</h2>
+            {subtitle && <span className="role-subtitle">{subtitle}</span>}
+          </div>
+          {meta && <p className="role-meta">{meta}</p>}
+          <ul className="role-bullets">
+            {bullets.map((b, i) => <li key={i}>{b}</li>)}
+          </ul>
+        </div>
+      </TiltCard>
+    </div>
+  );
+}
+
+function WorkTimeline({ roles }) {
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    if (REDUCED_MOTION) {
+      el.style.setProperty("--draw", "1");
+      return;
+    }
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const r = el.getBoundingClientRect();
+      const probe = window.innerHeight * 0.72;
+      const p = Math.min(1, Math.max(0, (probe - r.top) / r.height));
+      el.style.setProperty("--draw", p.toFixed(4));
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+
+  return (
+    <div ref={listRef} className="roles-list">
+      <div className="roles-track" aria-hidden="true">
+        <div className="roles-beam-fill" />
+        <div className="roles-beam-comet" />
+      </div>
+      {roles.map((role, i) => (
+        <RoleCard key={role.number} {...role} delay={i * 100} />
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   VIDEOS
+───────────────────────────────────────────── */
 function VideoCard({ url, thumb }) {
   const [playing, setPlaying] = useState(false);
   return (
-    <div
+    <TiltCard
+      max={4}
       className={`video-card${playing ? " video-card--playing" : ""}`}
       onClick={() => !playing && setPlaying(true)}
       role={playing ? undefined : "button"}
       tabIndex={playing ? undefined : 0}
+      aria-label={playing ? undefined : "Play video"}
       onKeyDown={(e) => {
         if (!playing && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
@@ -166,119 +569,18 @@ function VideoCard({ url, thumb }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function StatCard({ value, label, delay = 0 }) {
-  const [ref, inView] = useInView(0.1);
-  return (
-    <div
-      ref={ref}
-      className={`stat-card${inView ? " stat-card--show" : ""}`}
-      style={{ transitionDelay: `${delay}ms` }}
-    >
-      <div className="stat-value">{value}</div>
-      <div className="stat-label">{label}</div>
-    </div>
-  );
-}
-
-function RoleCard({ number, title, subtitle, meta, bullets, delay = 0 }) {
-  const [ref, inView] = useInView(0.08);
-  return (
-    <div
-      ref={ref}
-      className={`role-card${inView ? " role-card--show" : ""}`}
-      style={{ transitionDelay: `${delay}ms` }}
-    >
-      <div className="role-rail" aria-hidden="true">
-        <span className="role-rail-dot" />
-        <span className="role-rail-line" />
-      </div>
-      <div className="role-number">{number}</div>
-      <div className="role-content">
-        <div className="role-head">
-          <h3 className="role-title">{title}</h3>
-          {subtitle && <span className="role-subtitle">{subtitle}</span>}
-        </div>
-        {meta && <p className="role-meta">{meta}</p>}
-        <ul className="role-bullets">
-          {bullets.map((b, i) => <li key={i}>{b}</li>)}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-function ProjectCard({ name, url, updated, shot, delay = 0 }) {
-  const [ref, inView] = useInView(0.08);
-  const [shotFailed, setShotFailed] = useState(false);
-  const host = (() => {
-    try { return new URL(url).host; } catch { return url.replace(/^https?:\/\//, ""); }
-  })();
-  const hasShot = !!shot && !shotFailed;
-  return (
-    <a
-      ref={ref}
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`project-card${inView ? " project-card--show" : ""}`}
-      style={{ transitionDelay: `${delay}ms` }}
-      aria-label={`Open ${name}`}
-    >
-      <div className="project-window-bar">
-        <span className="project-window-dot project-window-dot--r" />
-        <span className="project-window-dot project-window-dot--y" />
-        <span className="project-window-dot project-window-dot--g" />
-        <span className="project-url-pill">{host}</span>
-        <span className="project-external" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M7 17 17 7" />
-            <path d="M8 7h9v9" />
-          </svg>
-        </span>
-      </div>
-      <div className="project-shot-wrap">
-        {hasShot && (
-          <img
-            src={`${process.env.PUBLIC_URL || ""}${shot}`}
-            alt={`${name} screenshot`}
-            className="project-shot"
-            loading="lazy"
-            onError={() => setShotFailed(true)}
-          />
-        )}
-        {!hasShot && (
-          <div className="project-shot-fallback">
-            <span className="project-shot-fallback-mark">{name.slice(0, 1).toUpperCase()}</span>
-          </div>
-        )}
-      </div>
-      <div className="project-meta">
-        <div className="project-name">{name}</div>
-        <div className="project-sub">
-          <span className="project-status">
-            <span className="project-status-dot" />
-            Live
-          </span>
-          {updated && <span className="project-updated">deployed {updated} ago</span>}
-        </div>
-      </div>
-    </a>
+    </TiltCard>
   );
 }
 
 /* ─────────────────────────────────────────────
-   HUD NAV (sticky top bar + scroll progress + section dots)
+   HUD NAV
 ───────────────────────────────────────────── */
 const SECTIONS = [
   { id: "top",      label: "Home" },
   { id: "about",    label: "About" },
   { id: "skills",   label: "Skills" },
   { id: "work",     label: "Work" },
-  { id: "projects", label: "Projects" },
   { id: "videos",   label: "Videos" },
   { id: "connect",  label: "Connect" },
 ];
@@ -288,7 +590,6 @@ function Hud() {
   const progress = useScrollProgress();
   const active = useActiveSection(SECTIONS.map((s) => s.id));
 
-  // SF time — render in user's local but label as SF when in SF
   const time = now.toLocaleTimeString("en-US", {
     timeZone: "America/Los_Angeles",
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
@@ -299,7 +600,10 @@ function Hud() {
       <div className="hud" role="navigation" aria-label="Primary">
         <a href="#top" className="hud-brand">
           <span className="hud-avatar">
-            <img src="/joey.png" alt="" />
+            <picture>
+              <source srcSet="/joey.webp" type="image/webp" />
+              <img src="/joey.png" alt="" width="512" height="512" />
+            </picture>
           </span>
           <span className="hud-brand-text">
             <span className="hud-brand-name">Joey Fraser</span>
@@ -333,7 +637,6 @@ function Hud() {
         <div className="hud-progress-bar" style={{ transform: `scaleX(${progress})` }} />
       </div>
 
-      {/* right-side section dots — full nav for desktop */}
       <div className="rail-nav" aria-hidden="true">
         {SECTIONS.map((s) => (
           <a
@@ -351,61 +654,71 @@ function Hud() {
 }
 
 /* ─────────────────────────────────────────────
+   SECTION HEAD
+───────────────────────────────────────────── */
+function SectionHead({ num, tag }) {
+  return (
+    <div className="section-head">
+      <span className="section-ghost" aria-hidden="true">{num.replace("/", "")}</span>
+      <span className="section-num">{num}</span>
+      <span className="section-tag">{tag}</span>
+      <span className="section-line" aria-hidden="true" />
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
    APP
 ───────────────────────────────────────────── */
+const TICKER_TERMS = [
+  "Risk operations", "Underwriting", "Collections & recovery",
+  "Hardware subscriptions", "Subscription economy", "Consumer credit",
+  "Real estate investing", "E-commerce operations",
+];
+
 export default function App() {
   const heroName = "joey fraser.";
-  const { typed, done: nameDone } = useTypewriter(heroName, { speedMs: 80, startDelay: 700 });
-  const [descRef, descInView] = useInView(0.08);
+  const { typed, done: nameDone } = useDecodeText(heroName, { startDelay: 650, stepMs: 60 });
+  const [copied, setCopied] = useState(false);
 
-  const wavePathsRef = useRef([null, null, null, null]);
-
-  /* live-fetched Vercel projects */
-  const [projects, setProjects] = useState({ projects: [], fetchedAt: null });
+  /* aurora ribbons — full-page canvas, scroll-velocity-reactive */
+  const ribbonCanvasRef = useRef(null);
   useEffect(() => {
-    fetch(`${process.env.PUBLIC_URL || ""}/projects.json`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : { projects: [] }))
-      .then((data) => setProjects(data))
-      .catch(() => setProjects({ projects: [] }));
-  }, []);
+    const canvas = ribbonCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
 
-  /* background waves — same scroll-reactive math, kept as-is */
-  useEffect(() => {
-    const samples = 80;
-    const startX = -200;
-    const endX = 1640;
-    const step = (endX - startX) / samples;
-
-    const waveConfigs = [
-      { baseAmp: 3, energyAmp: 14, freq: 0.0050, scrollSpeed:  0.010, timeSpeed: 0.40 },
-      { baseAmp: 4, energyAmp: 20, freq: 0.0080, scrollSpeed: -0.014, timeSpeed: 0.55 },
-      { baseAmp: 5, energyAmp: 24, freq: 0.0040, scrollSpeed:  0.018, timeSpeed: 0.35 },
-      { baseAmp: 6, energyAmp: 30, freq: 0.0070, scrollSpeed: -0.012, timeSpeed: 0.48 },
-    ];
-
-    const buildPath = (phase, amp, freq) => {
-      let d = "";
-      for (let i = 0; i <= samples; i++) {
-        const x = startX + i * step;
-        const y = 100 + amp * Math.sin(freq * (x - startX) + phase);
-        d += (i === 0 ? "M" : " L") + x.toFixed(1) + " " + y.toFixed(1);
-      }
-      return d;
+    let W = 0, H = 0, rafId = 0;
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
+    resize();
+    window.addEventListener("resize", resize);
 
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const RIBBONS = [
+      { band: 0.16, hue: 262, amp1: 22, amp2: 30, f1: 1.6, f2: 3.3, sp1: 0.20, sp2: -0.31, drift: 0.05, alpha: 0.05 },
+      { band: 0.50, hue: 274, amp1: 28, amp2: 36, f1: 1.2, f2: 2.7, sp1: -0.16, sp2: 0.26, drift: -0.04, alpha: 0.045 },
+      { band: 0.84, hue: 288, amp1: 24, amp2: 42, f1: 1.9, f2: 2.2, sp1: 0.14, sp2: -0.22, drift: 0.06, alpha: 0.055 },
+    ];
+    const STRANDS = 3;
+    const POINTS = 64;
+
     let energy = 0;
     let scrollPhase = 0;
     let timePhase = 0;
     let lastY = window.scrollY;
     let lastFrame = performance.now();
-    let rafId = 0;
 
     const onScroll = () => {
-      if (reduceMotion) return;
+      if (REDUCED_MOTION) return;
       const curY = window.scrollY;
       const delta = curY - lastY;
-      scrollPhase += delta;
+      scrollPhase += delta * 0.004;
       energy = Math.min(1, energy + Math.abs(delta) * 0.012);
       lastY = curY;
     };
@@ -413,17 +726,44 @@ export default function App() {
     const frame = (now) => {
       const dt = Math.min(0.06, (now - lastFrame) / 1000);
       lastFrame = now;
-      timePhase += dt;
-      energy = Math.max(0, energy - dt * 1.4);
+      if (!REDUCED_MOTION) timePhase += dt;
+      energy = Math.max(0, energy - dt * 1.3);
 
-      for (let i = 0; i < wavePathsRef.current.length; i++) {
-        const p = wavePathsRef.current[i];
-        if (!p) continue;
-        const cfg = waveConfigs[i];
-        const phase = scrollPhase * cfg.scrollSpeed + timePhase * cfg.timeSpeed;
-        const amp = cfg.baseAmp + energy * cfg.energyAmp;
-        p.setAttribute("d", buildPath(phase, amp, cfg.freq));
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+
+      for (const r of RIBBONS) {
+        const baseY = H * r.band + Math.sin(timePhase * r.drift * 4) * 24;
+        const surge = 1 + energy * 1.8;
+        const grad = ctx.createLinearGradient(0, 0, W, 0);
+        grad.addColorStop(0,    `hsla(${r.hue}, 85%, 66%, 0)`);
+        grad.addColorStop(0.25, `hsla(${r.hue}, 85%, 66%, ${(r.alpha * (1 + energy)).toFixed(3)})`);
+        grad.addColorStop(0.55, `hsla(${r.hue + 12}, 90%, 72%, ${(r.alpha * 1.6 * (1 + energy)).toFixed(3)})`);
+        grad.addColorStop(0.8,  `hsla(${r.hue}, 85%, 66%, ${(r.alpha * (1 + energy)).toFixed(3)})`);
+        grad.addColorStop(1,    `hsla(${r.hue}, 85%, 66%, 0)`);
+        ctx.strokeStyle = grad;
+
+        for (let s = 0; s < STRANDS; s++) {
+          const strandPhase = s * 0.9;
+          const strandOff = (s - 1) * 13;
+          ctx.lineWidth = s === 1 ? 1.6 : 1;
+          ctx.beginPath();
+          for (let i = 0; i <= POINTS; i++) {
+            const t = i / POINTS;
+            const x = t * W;
+            const y =
+              baseY + strandOff +
+              Math.sin(t * r.f1 * Math.PI * 2 + timePhase * r.sp1 * 6 + scrollPhase + strandPhase) * r.amp1 * surge +
+              Math.sin(t * r.f2 * Math.PI * 2 - timePhase * r.sp2 * 6 - scrollPhase * 0.7 + strandPhase) * r.amp2 * 0.5 * surge;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
       }
+      ctx.globalCompositeOperation = "source-over";
+
       rafId = requestAnimationFrame(frame);
     };
 
@@ -431,37 +771,44 @@ export default function App() {
     rafId = requestAnimationFrame(frame);
 
     return () => {
+      window.removeEventListener("resize", resize);
       window.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(rafId);
     };
   }, []);
 
-  /* particle constellation behind hero */
+  /* 3D starfield + shooting stars behind hero */
   const particleCanvasRef = useRef(null);
   useEffect(() => {
     const canvas = particleCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    let particles = [];
-    let mouse = { x: -9999, y: -9999 };
+    const FOV = 1.6;
+    let stars = [];
+    let shots = [];
+    let nextShot = 2.4;
+    let mouse = { x: 0, y: 0, px: 0, py: 0, inside: false };
+    let rotY = 0;
     let rafId = 0;
+    let W = 0, H = 0;
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = canvas.offsetWidth;
-      const h = canvas.offsetHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
+      W = canvas.offsetWidth;
+      H = canvas.offsetHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.floor((w * h) / 16000);
-      particles = Array.from({ length: count }, () => ({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.18,
-        vy: (Math.random() - 0.5) * 0.18,
-        r: Math.random() * 1.4 + 0.4,
+      const count = Math.min(150, Math.floor((W * H) / 11000));
+      stars = Array.from({ length: count }, () => ({
+        x: (Math.random() - 0.5) * 2,
+        y: (Math.random() - 0.5) * 2,
+        z: (Math.random() - 0.5) * 2,
+        tw: Math.random() * Math.PI * 2,
+        sp: 0.4 + Math.random() * 0.8,
+        hue: 262 + Math.random() * 28,
+        ox: 0, oy: 0,
       }));
     };
     resize();
@@ -471,58 +818,148 @@ export default function App() {
       const r = canvas.getBoundingClientRect();
       mouse.x = e.clientX - r.left;
       mouse.y = e.clientY - r.top;
+      mouse.px = (mouse.x / W - 0.5) * 2;
+      mouse.py = (mouse.y / H - 0.5) * 2;
+      mouse.inside = true;
     };
-    const onLeave = () => { mouse.x = -9999; mouse.y = -9999; };
+    const onLeave = () => { mouse.inside = false; };
     canvas.addEventListener("mousemove", onMove);
     canvas.addEventListener("mouseleave", onLeave);
 
-    const frame = () => {
-      const w = canvas.offsetWidth;
-      const h = canvas.offsetHeight;
-      ctx.clearRect(0, 0, w, h);
+    let lastFrame = performance.now();
+    const projected = [];
 
-      for (const p of particles) {
-        if (!reduceMotion) {
-          p.x += p.vx;
-          p.y += p.vy;
-          if (p.x < 0 || p.x > w) p.vx *= -1;
-          if (p.y < 0 || p.y > h) p.vy *= -1;
+    const frame = (now) => {
+      const dt = Math.min(0.06, (now - lastFrame) / 1000);
+      lastFrame = now;
+      if (!REDUCED_MOTION) rotY += dt * 0.05;
+
+      ctx.clearRect(0, 0, W, H);
+      const cx = W / 2;
+      const cy = H / 2;
+      const radius = Math.min(W, H) * 0.78;
+      const cosR = Math.cos(rotY);
+      const sinR = Math.sin(rotY);
+      const parX = mouse.inside ? mouse.px : 0;
+      const parY = mouse.inside ? mouse.py : 0;
+
+      projected.length = 0;
+      for (const s of stars) {
+        s.tw += dt * s.sp;
+        const x3 = s.x * cosR - s.z * sinR;
+        const z3 = s.x * sinR + s.z * cosR;
+        const scale = FOV / (FOV + z3);
+        let sx = cx + x3 * radius * scale + parX * 26 * scale;
+        let sy = cy + s.y * radius * 0.6 * scale + parY * 20 * scale;
+
+        if (mouse.inside && !REDUCED_MOTION) {
+          const dx = sx - mouse.x;
+          const dy = sy - mouse.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 130 * 130 && d2 > 0.01) {
+            const d = Math.sqrt(d2);
+            const push = (1 - d / 130) * 30;
+            s.ox += ((dx / d) * push - s.ox) * 0.08;
+            s.oy += ((dy / d) * push - s.oy) * 0.08;
+          } else {
+            s.ox *= 0.92; s.oy *= 0.92;
+          }
+        } else {
+          s.ox *= 0.92; s.oy *= 0.92;
         }
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(196,132,252,0.55)";
-        ctx.fill();
+        sx += s.ox;
+        sy += s.oy;
+
+        const twinkle = 0.6 + 0.4 * Math.sin(s.tw);
+        const alpha = (0.18 + 0.55 * ((scale - 0.55) / 0.9)) * twinkle;
+        const size = Math.max(0.4, 1.7 * scale);
+        projected.push({ sx, sy, scale, alpha, size, hue: s.hue });
       }
 
-      // link nearby particles
-      for (let i = 0; i < particles.length; i++) {
-        const a = particles[i];
-        for (let j = i + 1; j < particles.length; j++) {
-          const b = particles[j];
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
+      for (let i = 0; i < projected.length; i++) {
+        const a = projected[i];
+        for (let j = i + 1; j < projected.length; j++) {
+          const b = projected[j];
+          const dx = a.sx - b.sx;
+          const dy = a.sy - b.sy;
           const d2 = dx * dx + dy * dy;
           if (d2 < 110 * 110) {
-            const alpha = (1 - Math.sqrt(d2) / 110) * 0.18;
-            ctx.strokeStyle = `rgba(168,85,247,${alpha.toFixed(3)})`;
-            ctx.lineWidth = 1;
+            const depth = Math.min(a.scale, b.scale);
+            const alpha = (1 - Math.sqrt(d2) / 110) * 0.16 * depth;
+            ctx.strokeStyle = `hsla(270, 80%, 70%, ${alpha.toFixed(3)})`;
+            ctx.lineWidth = depth;
             ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
+            ctx.moveTo(a.sx, a.sy);
+            ctx.lineTo(b.sx, b.sy);
             ctx.stroke();
           }
         }
-        // link to mouse
-        const dx = a.x - mouse.x;
-        const dy = a.y - mouse.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < 160 * 160) {
-          const alpha = (1 - Math.sqrt(d2) / 160) * 0.55;
-          ctx.strokeStyle = `rgba(196,132,252,${alpha.toFixed(3)})`;
-          ctx.lineWidth = 1;
+      }
+
+      for (const p of projected) {
+        ctx.beginPath();
+        ctx.arc(p.sx, p.sy, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue}, 85%, 76%, ${Math.max(0, p.alpha).toFixed(3)})`;
+        ctx.fill();
+        if (p.scale > 1.15) {
           ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(mouse.x, mouse.y);
+          ctx.arc(p.sx, p.sy, p.size * 3.4, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${p.hue}, 90%, 70%, ${(p.alpha * 0.10).toFixed(3)})`;
+          ctx.fill();
+        }
+      }
+
+      if (mouse.inside) {
+        for (const p of projected) {
+          const dx = p.sx - mouse.x;
+          const dy = p.sy - mouse.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 170 * 170) {
+            const alpha = (1 - Math.sqrt(d2) / 170) * 0.45 * p.scale;
+            ctx.strokeStyle = `hsla(280, 90%, 78%, ${alpha.toFixed(3)})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(p.sx, p.sy);
+            ctx.lineTo(mouse.x, mouse.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      /* shooting stars */
+      if (!REDUCED_MOTION) {
+        nextShot -= dt;
+        if (nextShot <= 0) {
+          nextShot = 2.2 + Math.random() * 3.4;
+          const fromLeft = Math.random() > 0.5;
+          shots.push({
+            x: fromLeft ? -40 : W + 40,
+            y: Math.random() * H * 0.55,
+            vx: (fromLeft ? 1 : -1) * (520 + Math.random() * 380),
+            vy: 130 + Math.random() * 140,
+            life: 1,
+          });
+        }
+        for (let i = shots.length - 1; i >= 0; i--) {
+          const sh = shots[i];
+          sh.x += sh.vx * dt;
+          sh.y += sh.vy * dt;
+          sh.life -= dt * 0.7;
+          if (sh.life <= 0 || sh.x < -120 || sh.x > W + 120 || sh.y > H + 60) {
+            shots.splice(i, 1);
+            continue;
+          }
+          const tail = 90;
+          const nx = sh.vx / Math.hypot(sh.vx, sh.vy);
+          const ny = sh.vy / Math.hypot(sh.vx, sh.vy);
+          const g = ctx.createLinearGradient(sh.x, sh.y, sh.x - nx * tail, sh.y - ny * tail);
+          g.addColorStop(0, `hsla(280, 95%, 82%, ${(0.8 * sh.life).toFixed(3)})`);
+          g.addColorStop(1, "hsla(280, 95%, 82%, 0)");
+          ctx.strokeStyle = g;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(sh.x, sh.y);
+          ctx.lineTo(sh.x - nx * tail, sh.y - ny * tail);
           ctx.stroke();
         }
       }
@@ -538,6 +975,31 @@ export default function App() {
       cancelAnimationFrame(rafId);
     };
   }, []);
+
+  /* hero parallax vars — photo + floating data panels drift on cursor */
+  const heroRef = useRef(null);
+  useEffect(() => {
+    if (!CAN_HOVER || REDUCED_MOTION) return;
+    const el = heroRef.current;
+    if (!el) return;
+    const onMove = (e) => {
+      const nx = (e.clientX / window.innerWidth - 0.5) * 2;
+      const ny = (e.clientY / window.innerHeight - 0.5) * 2;
+      el.style.setProperty("--hpx", nx.toFixed(3));
+      el.style.setProperty("--hpy", ny.toFixed(3));
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
+  const copyEmail = () => {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText("connect@imjoey.me").then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      }).catch(() => {});
+    }
+  };
 
   /* ─── icons ─── */
   const MerchantSuccessIcon = (
@@ -608,6 +1070,8 @@ export default function App() {
   /* ─── categorized skills ─── */
   const skillCategories = [
     {
+      key: "ai",
+      color: "#c084fc",
       label: "AI & Automation",
       items: [
         { name: "Claude",      src: "https://cdn.simpleicons.org/anthropic/ffffff" },
@@ -617,6 +1081,8 @@ export default function App() {
       ],
     },
     {
+      key: "build",
+      color: "#8b5cf6",
       label: "Build & Deploy",
       items: [
         { name: "GitHub",          src: "https://cdn.simpleicons.org/github/ffffff" },
@@ -625,6 +1091,8 @@ export default function App() {
       ],
     },
     {
+      key: "data",
+      color: "#818cf8",
       label: "Data & Design",
       items: [
         { name: "Sigma", src: "/icons/sigma.svg" },
@@ -633,12 +1101,16 @@ export default function App() {
       ],
     },
     {
+      key: "growth",
+      color: "#e879f9",
       label: "Growth",
       items: [
         { name: "SEO", icon: SeoIcon },
       ],
     },
     {
+      key: "ops",
+      color: "#a78bfa",
       label: "Customer Ops",
       items: [
         { name: "Intercom",         src: "https://cdn.simpleicons.org/intercom/ffffff" },
@@ -710,32 +1182,19 @@ export default function App() {
 
   return (
     <div className="site">
+      <CursorGlow />
       <div className="bg-grid" aria-hidden="true" />
+      <div className="bg-aurora" aria-hidden="true" />
       <div className="bg-orb bg-orb--1" aria-hidden="true" />
       <div className="bg-orb bg-orb--2" aria-hidden="true" />
       <div className="bg-orb bg-orb--3" aria-hidden="true" />
-
-      <div className="bg-waves" aria-hidden="true">
-        {[1, 2, 3, 4].map((n, i) => (
-          <div key={n} className={`wave-layer wave-layer--${n}`}>
-            <svg viewBox="0 0 1440 200" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id={`wg${n}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={n % 2 ? "#7c3aed" : "#a855f7"} stopOpacity="0" />
-                  <stop offset="50%" stopColor={n % 2 ? "#7c3aed" : "#a855f7"} stopOpacity="1" />
-                  <stop offset="100%" stopColor={n % 2 ? "#7c3aed" : "#a855f7"} stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path ref={(el) => { wavePathsRef.current[i] = el; }} d="" stroke={`url(#wg${n})`} />
-            </svg>
-          </div>
-        ))}
-      </div>
+      <div className="bg-noise" aria-hidden="true" />
+      <canvas ref={ribbonCanvasRef} className="bg-ribbons" aria-hidden="true" />
 
       <Hud />
 
       {/* HERO */}
-      <section id="top" className="hero">
+      <section id="top" className="hero" ref={heroRef}>
         <canvas ref={particleCanvasRef} className="hero-canvas" aria-hidden="true" />
 
         <div className="hero-inner">
@@ -751,7 +1210,7 @@ export default function App() {
           </div>
 
           <h1 className="hero-name">
-            <span className="hero-name-text">{typed}</span>
+            <span className="hero-name-text" data-text={typed}>{typed}</span>
             <GlowCursor done={nameDone} />
           </h1>
 
@@ -762,9 +1221,35 @@ export default function App() {
               <span className="hero-tag hero-tag--ghost">Builder</span>
             </div>
             <div className="hero-photo-wrap">
-              <img src="/joey.png" alt="Joey Fraser" className="hero-photo" />
+              <span className="hero-photo-halo" aria-hidden="true" />
+              <picture>
+                <source srcSet="/joey.webp" type="image/webp" />
+                <img
+                  src="/joey.png"
+                  alt="Joey Fraser"
+                  className="hero-photo"
+                  width="512"
+                  height="512"
+                  fetchPriority="high"
+                />
+              </picture>
               <span className="hero-photo-ring" aria-hidden="true" />
             </div>
+          </div>
+        </div>
+
+        <div className="hero-ticker" aria-hidden="true">
+          <div className="hero-ticker-track">
+            {[0, 1].map((copy) => (
+              <div className="hero-ticker-group" key={copy}>
+                {TICKER_TERMS.map((t) => (
+                  <span className="hero-ticker-item" key={`${copy}-${t}`}>
+                    {t}
+                    <span className="hero-ticker-sep">✦</span>
+                  </span>
+                ))}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -777,27 +1262,17 @@ export default function App() {
       {/* ABOUT */}
       <section id="about" className="section">
         <div className="section-inner">
-          <div className="section-head">
-            <span className="section-num">/01</span>
-            <span className="section-tag">About</span>
-          </div>
-          <p ref={descRef} className={`about-text${descInView ? " about-text--show" : ""}`}>
-            I work at <span className="accent">Fragile</span>, a company that
-            powers hardware subscription programs for some of the world's leading
-            technology brands. As <span className="accent">Head of Risk</span>, I
-            oversee our entire risk and recovery function, leading strategy across
-            underwriting, delinquency management, and loss mitigation. I design
-            and implement data-driven systems that optimize account performance,
-            streamline recovery operations, and proactively reduce exposure across
-            our portfolio. My focus is on building scalable processes that protect
-            unit economics while preserving customer relationships and long-term
-            brand value.
-          </p>
+          <SectionHead num="/01" tag="About" />
+          <AboutReveal />
           <div className="stats-grid">
-            <StatCard value="$10M+" label="Net profit generated" delay={0} />
-            <StatCard value="200+"  label="Ecommerce stores scaled" delay={90} />
-            <StatCard value="24"    label="Real estate units owned" delay={180} />
-            <StatCard value="$1.1M+" label="Credit lines secured" delay={270} />
+            <StatCard value="$10M+" label="Net profit generated"
+              spark="0,24 14,20 28,21 42,14 56,16 70,9 84,10 100,3" delay={0} />
+            <StatCard value="200+" label="Ecommerce stores scaled"
+              spark="0,25 14,22 28,18 42,19 56,12 70,13 84,7 100,4" delay={90} />
+            <StatCard value="24" label="Real estate units owned"
+              spark="0,26 14,24 28,24 42,18 56,17 70,11 84,11 100,5" delay={180} />
+            <StatCard value="$1.1M+" label="Credit lines secured"
+              spark="0,23 14,24 28,17 42,18 56,10 70,12 84,6 100,2" delay={270} />
           </div>
         </div>
       </section>
@@ -805,70 +1280,23 @@ export default function App() {
       {/* SKILLS */}
       <section id="skills" className="section">
         <div className="section-inner">
-          <div className="section-head">
-            <span className="section-num">/02</span>
-            <span className="section-tag">Skills</span>
-          </div>
-          <div className="skill-categories">
-            {skillCategories.map((cat, i) => (
-              <SkillCategory key={cat.label} {...cat} baseDelay={i * 60} />
-            ))}
-          </div>
+          <SectionHead num="/02" tag="Skills" />
+          <SkillsConsole categories={skillCategories} />
         </div>
       </section>
 
       {/* WORK */}
       <section id="work" className="section">
         <div className="section-inner">
-          <div className="section-head">
-            <span className="section-num">/03</span>
-            <span className="section-tag">Professional Background</span>
-          </div>
-          <div className="roles-list">
-            {roles.map((role, i) => (
-              <RoleCard key={role.number} {...role} delay={i * 100} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* PROJECTS */}
-      <section id="projects" className="section">
-        <div className="section-inner">
-          <div className="section-head">
-            <span className="section-num">/04</span>
-            <span className="section-tag">Projects</span>
-            <span className="section-sync" title="Auto-synced from Vercel at build time">
-              <span className="section-sync-dot" />
-              <span className="section-sync-text">
-                synced from vercel
-                {projects.fetchedAt && ` · ${new Date(projects.fetchedAt).toLocaleDateString()}`}
-              </span>
-            </span>
-          </div>
-
-          {projects.projects.length > 0 ? (
-            <div className="project-grid">
-              {projects.projects.map((p, i) => (
-                <ProjectCard key={p.name} {...p} delay={i * 80} />
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <span className="empty-state-dot" />
-              <span>No projects synced yet. Run <code>npm run build</code> or push to deploy.</span>
-            </div>
-          )}
+          <SectionHead num="/03" tag="Professional Background" />
+          <WorkTimeline roles={roles} />
         </div>
       </section>
 
       {/* VIDEOS */}
       <section id="videos" className="section">
         <div className="section-inner">
-          <div className="section-head">
-            <span className="section-num">/05</span>
-            <span className="section-tag">Video Content</span>
-          </div>
+          <SectionHead num="/04" tag="Video Content" />
           <div className="video-rail">
             {videos.map((v) => (
               <VideoCard key={v.id} url={v.url} thumb={v.thumb} />
@@ -878,29 +1306,46 @@ export default function App() {
       </section>
 
       {/* CONNECT */}
-      <section id="connect" className="section">
+      <section id="connect" className="section section--connect">
         <div className="section-inner">
-          <div className="section-head">
-            <span className="section-num">/06</span>
-            <span className="section-tag">Connect</span>
-          </div>
+          <SectionHead num="/05" tag="Connect" />
+          <h2 className="connect-headline">
+            Open a <span className="connect-headline-accent">channel</span><span className="connect-headline-dot">.</span>
+          </h2>
           <div className="connect-grid">
-            <a className="connect-card" href="https://www.linkedin.com/in/josephfraser/"
-               target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
-              <svg className="connect-logo" viewBox="0 0 24 24" fill="rgba(255,255,255,0.88)" aria-hidden="true">
-                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.852 3.37-1.852 3.601 0 4.267 2.37 4.267 5.455v6.288zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-              </svg>
-              <span className="connect-label">LinkedIn</span>
-            </a>
-            <a className="connect-card" href="mailto:connect@imjoey.me" aria-label="Email connect@imjoey.me">
-              <img src="https://cdn.simpleicons.org/gmail/ffffff" alt="" className="connect-logo" />
-              <span className="connect-label">Email</span>
-            </a>
-            <a className="connect-card" href="https://github.com/joeyjaf"
-               target="_blank" rel="noopener noreferrer" aria-label="GitHub">
-              <img src="https://cdn.simpleicons.org/github/ffffff" alt="" className="connect-logo" />
-              <span className="connect-label">GitHub</span>
-            </a>
+            <Magnetic>
+              <TiltCard as="a" className="connect-card" max={8} href="https://www.linkedin.com/in/josephfraser/"
+                 target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                <svg className="connect-logo" viewBox="0 0 24 24" fill="rgba(255,255,255,0.88)" aria-hidden="true">
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.852 3.37-1.852 3.601 0 4.267 2.37 4.267 5.455v6.288zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                </svg>
+                <span className="connect-label">LinkedIn</span>
+                <span className="connect-handle">/in/josephfraser</span>
+              </TiltCard>
+            </Magnetic>
+            <Magnetic>
+              <TiltCard as="a" className="connect-card" max={8} href="mailto:connect@imjoey.me" aria-label="Email connect@imjoey.me">
+                <img src="https://cdn.simpleicons.org/gmail/ffffff" alt="" className="connect-logo" />
+                <span className="connect-label">Email</span>
+                <span className="connect-handle">connect@imjoey.me</span>
+              </TiltCard>
+            </Magnetic>
+            <Magnetic>
+              <TiltCard as="a" className="connect-card" max={8} href="https://github.com/joeyjaf"
+                 target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+                <img src="https://cdn.simpleicons.org/github/ffffff" alt="" className="connect-logo" />
+                <span className="connect-label">GitHub</span>
+                <span className="connect-handle">@joeyjaf</span>
+              </TiltCard>
+            </Magnetic>
+          </div>
+          <div className="connect-copy">
+            <span className="connect-copy-prompt" aria-hidden="true">$</span>
+            <span className="connect-copy-cmd" aria-hidden="true">cp</span>
+            <span className="connect-copy-mail">connect@imjoey.me</span>
+            <button type="button" className="connect-copy-btn" onClick={copyEmail}>
+              {copied ? "copied ✓" : "copy"}
+            </button>
           </div>
         </div>
       </section>
