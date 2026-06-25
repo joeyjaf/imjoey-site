@@ -537,6 +537,43 @@ function WorkTimeline({ roles }) {
   );
 }
 
+function EarlyCareer({ jobs }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="early-wrap">
+      <button
+        type="button"
+        className={`early-toggle${open ? " early-toggle--open" : ""}`}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="early-toggle-spark" aria-hidden="true" />
+        <span className="early-toggle-text">
+          {open ? "less back-story" : "what led us here"}
+        </span>
+        <span className="early-toggle-chevron" aria-hidden="true">↓</span>
+      </button>
+
+      {open && (
+        <div className="early-grid">
+          {jobs.map((j, i) => (
+            <div
+              className="early-card"
+              key={j.role + j.place}
+              style={{ animationDelay: `${i * 55}ms` }}
+            >
+              <span className="early-corner" aria-hidden="true" />
+              <div className="early-role">{j.role}</div>
+              <div className="early-place">{j.place}</div>
+              <p className="early-blurb">{j.blurb}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────────────────────────────────────
    VIDEOS
 ───────────────────────────────────────────── */
@@ -574,6 +611,68 @@ function VideoCard({ url, thumb }) {
 }
 
 /* ─────────────────────────────────────────────
+   PROJECTS — browser-chrome card with live screenshot
+───────────────────────────────────────────── */
+function ProjectCard({ name, url, tagline, shot, delay = 0 }) {
+  const [ref, inView] = useInView(0.08);
+  const [shotFailed, setShotFailed] = useState(false);
+  const host = (() => {
+    try { return new URL(url).host; } catch { return url.replace(/^https?:\/\//, ""); }
+  })();
+  const hasShot = !!shot && !shotFailed;
+  return (
+    <a
+      ref={ref}
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`project-card${inView ? " project-card--show" : ""}`}
+      style={{ transitionDelay: `${delay}ms` }}
+      aria-label={`Open ${name}`}
+    >
+      <div className="project-window-bar">
+        <span className="project-window-dot project-window-dot--r" />
+        <span className="project-window-dot project-window-dot--y" />
+        <span className="project-window-dot project-window-dot--g" />
+        <span className="project-url-pill">{host}</span>
+        <span className="project-external" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 17 17 7" />
+            <path d="M8 7h9v9" />
+          </svg>
+        </span>
+      </div>
+      <div className="project-shot-wrap">
+        {hasShot && (
+          <img
+            src={`${process.env.PUBLIC_URL || ""}${shot}`}
+            alt={`${name} screenshot`}
+            className="project-shot"
+            loading="lazy"
+            onError={() => setShotFailed(true)}
+          />
+        )}
+        {!hasShot && (
+          <div className="project-shot-fallback">
+            <span className="project-shot-fallback-mark">{name.slice(0, 1).toUpperCase()}</span>
+          </div>
+        )}
+      </div>
+      <div className="project-meta">
+        <div className="project-name">{name}</div>
+        <div className="project-sub">
+          <span className="project-status">
+            <span className="project-status-dot" />
+            Live
+          </span>
+          {tagline && <span className="project-updated">{tagline}</span>}
+        </div>
+      </div>
+    </a>
+  );
+}
+
+/* ─────────────────────────────────────────────
    HUD NAV
 ───────────────────────────────────────────── */
 const SECTIONS = [
@@ -581,6 +680,7 @@ const SECTIONS = [
   { id: "about",    label: "About" },
   { id: "skills",   label: "Skills" },
   { id: "work",     label: "Work" },
+  { id: "projects", label: "Projects" },
   { id: "videos",   label: "Videos" },
   { id: "connect",  label: "Connect" },
 ];
@@ -680,6 +780,15 @@ export default function App() {
   const heroName = "joey fraser.";
   const { typed, done: nameDone } = useDecodeText(heroName, { startDelay: 650, stepMs: 60 });
   const [copied, setCopied] = useState(false);
+
+  /* curated projects — static list in public/projects.json (not Vercel-synced) */
+  const [projects, setProjects] = useState([]);
+  useEffect(() => {
+    fetch(`${process.env.PUBLIC_URL || ""}/projects.json`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { projects: [] }))
+      .then((data) => setProjects(Array.isArray(data.projects) ? data.projects : []))
+      .catch(() => setProjects([]));
+  }, []);
 
   /* aurora ribbons — full-page canvas, scroll-velocity-reactive */
   const ribbonCanvasRef = useRef(null);
@@ -1129,6 +1238,7 @@ export default function App() {
     { id: "v2", url: "/video2.mp4", thumb: MountainIcon },
   ];
 
+
   const roles = [
     {
       number: "01",
@@ -1146,7 +1256,7 @@ export default function App() {
     {
       number: "02",
       title: "Project WiFi",
-      subtitle: "Co-Owner & CFO",
+      subtitle: "Co-Owner & Operations Executive",
       meta: "May 2020–Mar 2023",
       bullets: [
         "Opened, managed, and scaled 200+ profitable ecommerce stores for clients",
@@ -1178,6 +1288,30 @@ export default function App() {
         "130+ card approvals facilitated — 10+ businesses launched",
       ],
     },
+    {
+      number: "05",
+      title: "Oregon State University",
+      subtitle: "Bachelor's, Business Administration",
+      meta: "Corvallis, OR · 2014–2018",
+      bullets: [
+        "Focus in Entrepreneurship",
+      ],
+    },
+  ];
+
+  const earlyJobs = [
+    { role: "Airbnb Owner & Manager", place: "Dayton, OH", blurb: "Furnished, listed, and ran a short-term rental from a thousand miles away." },
+    { role: "Entrepreneurship Teacher", place: "Falls City High School · Falls City, OR", blurb: "Taught high schoolers how to think like founders." },
+    { role: "Store Manager", place: "Sherwin-Williams · Portland, OR", blurb: "Ran the floor, the inventory, and the crew at the paint store." },
+    { role: "Lumber Broker", place: "AIFP · Beaverton, OR", blurb: "Brokered truckloads of lumber over the phone." },
+    { role: "Front Desk", place: "OSU Bowling Alley · Corvallis, OR", blurb: "Rented shoes, set lanes, and kept the place running." },
+    { role: "Owner", place: "Nice Menswear · Corvallis, OR", blurb: "Sourced, styled, and sold men's clothing as my own shop." },
+    { role: "District Manager", place: "College Works Painting · Corvallis, OR", blurb: "Recruited and coached student-run painting branches across a district." },
+    { role: "Branch Manager", place: "College Works Painting · Redmond, OR", blurb: "Booked the jobs, hired the crews, painted the houses." },
+    { role: "Pizza Chef & Machine Mechanic", place: "Madras Bowl · Madras, OR", blurb: "Made the pizzas and fixed the pinsetters between rushes." },
+    { role: "Janitor", place: "The Store · Culver, OR", blurb: "Closed up and cleaned the local market every night." },
+    { role: "Park Ranger", place: "The Cove Palisades · Culver, OR", blurb: "Worked the state park where the canyon meets the lake." },
+    { role: "Field Hand", place: "Onion Fields · Culver, OR", blurb: "Where it started — long days in the Central Oregon dirt." },
   ];
 
   return (
@@ -1290,13 +1424,26 @@ export default function App() {
         <div className="section-inner">
           <SectionHead num="/03" tag="Professional Background" />
           <WorkTimeline roles={roles} />
+          <EarlyCareer jobs={earlyJobs} />
+        </div>
+      </section>
+
+      {/* PROJECTS */}
+      <section id="projects" className="section">
+        <div className="section-inner">
+          <SectionHead num="/04" tag="Projects" />
+          <div className="project-grid">
+            {projects.map((p, i) => (
+              <ProjectCard key={p.name} {...p} delay={i * 80} />
+            ))}
+          </div>
         </div>
       </section>
 
       {/* VIDEOS */}
       <section id="videos" className="section">
         <div className="section-inner">
-          <SectionHead num="/04" tag="Video Content" />
+          <SectionHead num="/05" tag="Video Content" />
           <div className="video-rail">
             {videos.map((v) => (
               <VideoCard key={v.id} url={v.url} thumb={v.thumb} />
@@ -1308,7 +1455,7 @@ export default function App() {
       {/* CONNECT */}
       <section id="connect" className="section section--connect">
         <div className="section-inner">
-          <SectionHead num="/05" tag="Connect" />
+          <SectionHead num="/06" tag="Connect" />
           <h2 className="connect-headline">
             Open a <span className="connect-headline-accent">channel</span><span className="connect-headline-dot">.</span>
           </h2>
