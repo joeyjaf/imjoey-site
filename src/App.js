@@ -66,6 +66,36 @@ function useInView(threshold = 0.12) {
   return [ref, inView];
 }
 
+/* Touch devices have no cursor, so hover-driven effects never fire. This
+   swaps the trigger to scroll position: each .glitch / .glare element gets a
+   one-shot class as it enters view. Desktop keeps hover and is untouched.
+   `rescan` lets async content (projects.json) get picked up on arrival. */
+function useTouchMotion(rescan) {
+  useEffect(() => {
+    if (CAN_HOVER || REDUCED_MOTION) return;
+    const targets = document.querySelectorAll(
+      ".glitch:not(.glitch--burst), .glare:not(.glare--sweep)"
+    );
+    if (!targets.length) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          obs.unobserve(e.target);
+          e.target.classList.add(
+            e.target.classList.contains("glitch") ? "glitch--burst" : "glare--sweep"
+          );
+        }
+      },
+      { threshold: 0.25, rootMargin: "0px 0px -8% 0px" }
+    );
+
+    targets.forEach((t) => obs.observe(t));
+    return () => obs.disconnect();
+  }, [rescan]);
+}
+
 function useLiveClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -273,7 +303,7 @@ function BgCursorGrid({
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    if (!CAN_HOVER || REDUCED_MOTION) return;
+    if (REDUCED_MOTION) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -392,23 +422,38 @@ function BgCursorGrid({
       raf = requestAnimationFrame(draw);
     };
 
+    const pulse = (x, y) => { pulses.push({ x, y, t0: performance.now() }); wake(); };
     const onMove = (e) => { energize(e.clientX, e.clientY); wake(); };
-    const onDown = (e) => { pulses.push({ x: e.clientX, y: e.clientY, t0: performance.now() }); wake(); };
     const onResize = () => { rebuild(); wake(); };
 
+    // Touch has no cursor to trail, so taps drive it instead. Guard against
+    // firing on scroll: a real tap barely moves and ends quickly.
+    let downX = 0, downY = 0, downT = 0;
+    const onDown = (e) => {
+      if (CAN_HOVER) { pulse(e.clientX, e.clientY); return; }
+      downX = e.clientX; downY = e.clientY; downT = performance.now();
+    };
+    const onUp = (e) => {
+      if (CAN_HOVER) return;
+      const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+      if (moved < 12 && performance.now() - downT < 400) pulse(e.clientX, e.clientY);
+    };
+
     rebuild();
-    window.addEventListener("pointermove", onMove, { passive: true });
+    if (CAN_HOVER) window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("pointerdown", onDown, { passive: true });
+    window.addEventListener("pointerup", onUp, { passive: true });
     window.addEventListener("resize", onResize);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointerup", onUp);
       window.removeEventListener("resize", onResize);
     };
   }, [cellSize, color, radius, holdTime, fadeDuration, lineWidth, maxOpacity, pulseSpeed]);
 
-  if (!CAN_HOVER || REDUCED_MOTION) return null;
+  if (REDUCED_MOTION) return null;
   return <canvas ref={canvasRef} className="bg-cursor-grid" aria-hidden="true" />;
 }
 
@@ -910,7 +955,7 @@ function Hud() {
    SECTION HEAD
 ───────────────────────────────────────────── */
 function GlitchText({ children, speed = 1, className = "" }) {
-  if (REDUCED_MOTION || !CAN_HOVER) {
+  if (REDUCED_MOTION) {
     return <span className={className}>{children}</span>;
   }
   return (
@@ -960,6 +1005,9 @@ export default function App() {
       .then((data) => setProjects(Array.isArray(data.projects) ? data.projects : []))
       .catch(() => setProjects([]));
   }, []);
+
+  /* touch fallback for the hover-driven effects — re-scans once projects land */
+  useTouchMotion(projects.length);
 
   /* aurora ribbons — full-page canvas, scroll-velocity-reactive */
   const ribbonCanvasRef = useRef(null);

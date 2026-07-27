@@ -825,20 +825,47 @@ button { font: inherit; }
   opacity: 0;
   pointer-events: none;
 }
-.glitch:hover::after {
-  content: attr(data-text);
-  opacity: 1;
-  left: 2px;
-  text-shadow: -2px 0 var(--purple);
-  animation: glitch-band var(--after-duration, 3s) infinite linear alternate-reverse;
+/* pointer devices: glitch while hovered */
+@media (hover: hover) and (pointer: fine) {
+  .glitch:hover::after {
+    content: attr(data-text);
+    opacity: 1;
+    left: 2px;
+    text-shadow: -2px 0 var(--purple);
+    animation: glitch-band var(--after-duration, 3s) infinite linear alternate-reverse;
+  }
+  .glitch:hover::before {
+    content: attr(data-text);
+    opacity: 1;
+    left: -2px;
+    text-shadow: 2px 0 var(--lilac);
+    animation: glitch-band var(--before-duration, 2s) infinite linear alternate-reverse;
+  }
 }
-.glitch:hover::before {
-  content: attr(data-text);
-  opacity: 1;
-  left: -2px;
-  text-shadow: 2px 0 var(--lilac);
-  animation: glitch-band var(--before-duration, 2s) infinite linear alternate-reverse;
+
+/* touch devices: no cursor to hover with, so the section head glitches once
+   as it scrolls into view, then settles */
+@media (hover: none) {
+  .glitch--burst::after {
+    content: attr(data-text);
+    opacity: 1;
+    left: 2px;
+    text-shadow: -2px 0 var(--purple);
+    animation:
+      glitch-band 0.4s linear 3 alternate-reverse,
+      glitch-settle 0.22s linear 1s forwards;
+  }
+  .glitch--burst::before {
+    content: attr(data-text);
+    opacity: 1;
+    left: -2px;
+    text-shadow: 2px 0 var(--lilac);
+    animation:
+      glitch-band 0.29s linear 4 alternate-reverse,
+      glitch-settle 0.22s linear 1s forwards;
+  }
 }
+@keyframes glitch-settle { to { opacity: 0; } }
 
 @keyframes glitch-band {
   0%   { clip-path: inset(20% 0 50% 0); }
@@ -1413,28 +1440,41 @@ button { font: inherit; }
   gap: 22px;
   max-width: 480px;
 }
-/* GlareHover — adapted from React Bits: applied in place, no wrapper element */
+/* GlareHover — adapted from React Bits: applied in place, no wrapper element.
+   Shared visual; only the trigger differs by input type. */
+.glare { position: relative; overflow: hidden; }
+.glare::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(
+    var(--glare-angle, -45deg),
+    transparent 60%,
+    var(--glare-color, rgba(226,214,255,0.26)) 70%,
+    transparent 80%
+  );
+  background-size: var(--glare-size, 250%) var(--glare-size, 250%);
+  background-repeat: no-repeat;
+  background-position: -100% -100%;
+}
+
+/* pointer devices: sweep follows hover in and out */
 @media (hover: hover) and (pointer: fine) {
-  .glare { position: relative; overflow: hidden; }
-  .glare::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 4;
-    pointer-events: none;
-    background: linear-gradient(
-      var(--glare-angle, -45deg),
-      transparent 60%,
-      var(--glare-color, rgba(226,214,255,0.26)) 70%,
-      transparent 80%
-    );
-    background-size: var(--glare-size, 250%) var(--glare-size, 250%);
-    background-repeat: no-repeat;
-    background-position: -100% -100%;
-    transition: background-position var(--glare-duration, 700ms) ease;
-  }
+  .glare::before { transition: background-position var(--glare-duration, 700ms) ease; }
   .glare:hover::before { background-position: 100% 100%; }
 }
+
+/* touch devices: sweep fires once as the card scrolls into view */
+@media (hover: none) {
+  .glare--sweep::before { animation: glare-sweep 1150ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+}
+@keyframes glare-sweep {
+  from { background-position: -100% -100%; }
+  to   { background-position: 100% 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .glare::before { display: none; }
 }
