@@ -70,6 +70,14 @@ button { font: inherit; }
   mask-image: radial-gradient(ellipse at 50% 30%, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0) 95%);
 }
 
+.bg-cursor-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse at 50% 30%, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0) 95%);
+}
+
 .bg-aurora {
   position: fixed;
   inset: -25%;
@@ -420,6 +428,7 @@ button { font: inherit; }
 .hero-inner a, .hero-inner .hero-photo-wrap { pointer-events: auto; }
 
 .hero-badge {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -429,6 +438,50 @@ button { font: inherit; }
   background: rgba(124,58,237,0.07);
   margin-bottom: 26px;
   animation: fade-drop 700ms 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* StarBorder — adapted from React Bits: clipping span so the badge dot glow survives */
+.star-border {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.star-border::before,
+.star-border::after {
+  content: "";
+  position: absolute;
+  width: 300%;
+  height: 50%;
+  border-radius: 50%;
+  opacity: 0.7;
+  background: radial-gradient(circle, var(--lilac), transparent 10%);
+}
+.star-border::before {
+  bottom: -5px;
+  right: -250%;
+  animation: star-movement-bottom 6s linear infinite alternate;
+}
+.star-border::after {
+  top: -5px;
+  left: -250%;
+  animation: star-movement-top 6s linear infinite alternate;
+}
+.hero-badge-dot,
+.hero-badge-text { position: relative; z-index: 1; }
+
+@keyframes star-movement-bottom {
+  0%   { transform: translate(0%, 0%); opacity: 1; }
+  100% { transform: translate(-100%, 0%); opacity: 0; }
+}
+@keyframes star-movement-top {
+  0%   { transform: translate(0%, 0%); opacity: 1; }
+  100% { transform: translate(100%, 0%); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-border { display: none; }
 }
 .hero-badge-dot {
   width: 7px; height: 7px;
@@ -755,6 +808,50 @@ button { font: inherit; }
   flex: 1;
   height: 1px;
   background: linear-gradient(90deg, rgba(168,85,247,0.35), rgba(168,85,247,0.04));
+}
+
+/* GlitchText — adapted from React Bits: hover-triggered, purple chromatic split */
+.glitch {
+  position: relative;
+  display: inline-block;
+  user-select: none;
+}
+.glitch::before,
+.glitch::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.glitch:hover::after {
+  content: attr(data-text);
+  opacity: 1;
+  left: 2px;
+  text-shadow: -2px 0 var(--purple);
+  animation: glitch-band var(--after-duration, 3s) infinite linear alternate-reverse;
+}
+.glitch:hover::before {
+  content: attr(data-text);
+  opacity: 1;
+  left: -2px;
+  text-shadow: 2px 0 var(--lilac);
+  animation: glitch-band var(--before-duration, 2s) infinite linear alternate-reverse;
+}
+
+@keyframes glitch-band {
+  0%   { clip-path: inset(20% 0 50% 0); }
+  10%  { clip-path: inset(10% 0 60% 0); }
+  20%  { clip-path: inset(30% 0 40% 0); }
+  30%  { clip-path: inset(15% 0 55% 0); }
+  40%  { clip-path: inset(25% 0 35% 0); }
+  50%  { clip-path: inset(40% 0 20% 0); }
+  60%  { clip-path: inset(15% 0 55% 0); }
+  70%  { clip-path: inset(30% 0 40% 0); }
+  80%  { clip-path: inset(20% 0 50% 0); }
+  90%  { clip-path: inset(10% 0 60% 0); }
+  100% { clip-path: inset(25% 0 35% 0); }
 }
 
 /* ═══════════════════════════════════════════════
@@ -1316,6 +1413,32 @@ button { font: inherit; }
   gap: 22px;
   max-width: 480px;
 }
+/* GlareHover — adapted from React Bits: applied in place, no wrapper element */
+@media (hover: hover) and (pointer: fine) {
+  .glare { position: relative; overflow: hidden; }
+  .glare::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    background: linear-gradient(
+      var(--glare-angle, -45deg),
+      transparent 60%,
+      var(--glare-color, rgba(226,214,255,0.26)) 70%,
+      transparent 80%
+    );
+    background-size: var(--glare-size, 250%) var(--glare-size, 250%);
+    background-repeat: no-repeat;
+    background-position: -100% -100%;
+    transition: background-position var(--glare-duration, 700ms) ease;
+  }
+  .glare:hover::before { background-position: 100% 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glare::before { display: none; }
+}
+
 .project-card {
   display: block;
   background: var(--surface);

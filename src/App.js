@@ -259,6 +259,159 @@ function CountUp({ value, duration = 1600 }) {
   return <span ref={ref}>{disp}</span>;
 }
 
+/* CursorGrid — adapted from React Bits: window-level pointer, idles when dark */
+function BgCursorGrid({
+  cellSize = 44,
+  color = "#a855f7",
+  radius = 150,
+  holdTime = 320,
+  fadeDuration = 900,
+  lineWidth = 1.2,
+  maxOpacity = 0.5,
+  pulseSpeed = 620,
+}) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (!CAN_HOVER || REDUCED_MOTION) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const [cr, cg, cb] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+
+    let cols = 0, rows = 0, offX = 0, offY = 0, w = 0, h = 0;
+    let alphas = new Float32Array(0);
+    let touched = new Float64Array(0);
+    const pulses = [];
+    let raf = 0, running = false, lastFrame = 0;
+
+    const rebuild = () => {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.max(1, Math.round(w * dpr));
+      canvas.height = Math.max(1, Math.round(h * dpr));
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cols = Math.ceil(w / cellSize) + 1;
+      rows = Math.ceil(h / cellSize) + 1;
+      offX = (w - cols * cellSize) / 2;
+      offY = (h - rows * cellSize) / 2;
+      alphas = new Float32Array(cols * rows);
+      touched = new Float64Array(cols * rows);
+    };
+
+    const center = (i) => [
+      offX + (i % cols) * cellSize + cellSize / 2,
+      offY + Math.floor(i / cols) * cellSize + cellSize / 2,
+    ];
+
+    const energize = (x, y) => {
+      const now = performance.now();
+      const minC = Math.max(0, Math.floor((x - radius - offX) / cellSize));
+      const maxC = Math.min(cols - 1, Math.floor((x + radius - offX) / cellSize));
+      const minR = Math.max(0, Math.floor((y - radius - offY) / cellSize));
+      const maxR = Math.min(rows - 1, Math.floor((y + radius - offY) / cellSize));
+      for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+          const i = r * cols + c;
+          const [cx, cy] = center(i);
+          const dist = Math.hypot(cx - x, cy - y);
+          if (dist > radius) continue;
+          const t = 1 - dist / radius;
+          const level = t * t * (3 - 2 * t) * maxOpacity;
+          if (level > alphas[i]) alphas[i] = level;
+          touched[i] = now;
+        }
+      }
+    };
+
+    const draw = (now) => {
+      const dt = Math.min(now - lastFrame, 50);
+      lastFrame = now;
+      ctx.clearRect(0, 0, w, h);
+
+      for (let pi = pulses.length - 1; pi >= 0; pi--) {
+        const p = pulses[pi];
+        const ringR = ((now - p.t0) / 1000) * pulseSpeed;
+        if (ringR > Math.hypot(w, h)) { pulses.splice(pi, 1); continue; }
+        const band = cellSize;
+        const minC = Math.max(0, Math.floor((p.x - ringR - band - offX) / cellSize));
+        const maxC = Math.min(cols - 1, Math.floor((p.x + ringR + band - offX) / cellSize));
+        const minR = Math.max(0, Math.floor((p.y - ringR - band - offY) / cellSize));
+        const maxR = Math.min(rows - 1, Math.floor((p.y + ringR + band - offY) / cellSize));
+        for (let r = minR; r <= maxR; r++) {
+          for (let c = minC; c <= maxC; c++) {
+            const i = r * cols + c;
+            const [cx, cy] = center(i);
+            if (Math.abs(Math.hypot(cx - p.x, cy - p.y) - ringR) < band / 2 && maxOpacity > alphas[i]) {
+              alphas[i] = maxOpacity;
+              touched[i] = now;
+            }
+          }
+        }
+      }
+
+      let anyVisible = pulses.length > 0;
+      const fadeStep = dt / Math.max(fadeDuration, 16);
+      const half = cellSize / 2;
+
+      for (let i = 0; i < alphas.length; i++) {
+        let a = alphas[i];
+        if (a <= 0) continue;
+        if (now - touched[i] > holdTime) {
+          a = Math.max(0, a - fadeStep);
+          alphas[i] = a;
+          if (a <= 0) continue;
+        }
+        anyVisible = true;
+        const [cx, cy] = center(i);
+        const grad = ctx.createRadialGradient(cx, cy, half * 0.1, cx, cy, cellSize);
+        grad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, ${a})`);
+        grad.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
+        ctx.beginPath();
+        ctx.rect(cx - half + 0.5, cy - half + 0.5, cellSize - 1, cellSize - 1);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = lineWidth;
+        ctx.stroke();
+      }
+
+      if (anyVisible) {
+        raf = requestAnimationFrame(draw);
+      } else {
+        running = false;
+        ctx.clearRect(0, 0, w, h);
+      }
+    };
+
+    const wake = () => {
+      if (running) return;
+      running = true;
+      lastFrame = performance.now();
+      raf = requestAnimationFrame(draw);
+    };
+
+    const onMove = (e) => { energize(e.clientX, e.clientY); wake(); };
+    const onDown = (e) => { pulses.push({ x: e.clientX, y: e.clientY, t0: performance.now() }); wake(); };
+    const onResize = () => { rebuild(); wake(); };
+
+    rebuild();
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerdown", onDown, { passive: true });
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [cellSize, color, radius, holdTime, fadeDuration, lineWidth, maxOpacity, pulseSpeed]);
+
+  if (!CAN_HOVER || REDUCED_MOTION) return null;
+  return <canvas ref={canvasRef} className="bg-cursor-grid" aria-hidden="true" />;
+}
+
 /* ─────────────────────────────────────────────
    CONTENT PRIMITIVES
 ───────────────────────────────────────────── */
@@ -626,7 +779,7 @@ function ProjectCard({ name, url, tagline, shot, delay = 0 }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`project-card${inView ? " project-card--show" : ""}`}
+      className={`project-card glare${inView ? " project-card--show" : ""}`}
       style={{ transitionDelay: `${delay}ms` }}
       aria-label={`Open ${name}`}
     >
@@ -756,12 +909,30 @@ function Hud() {
 /* ─────────────────────────────────────────────
    SECTION HEAD
 ───────────────────────────────────────────── */
+function GlitchText({ children, speed = 1, className = "" }) {
+  if (REDUCED_MOTION || !CAN_HOVER) {
+    return <span className={className}>{children}</span>;
+  }
+  return (
+    <span
+      className={`glitch ${className}`}
+      data-text={children}
+      style={{
+        "--after-duration": `${speed * 3}s`,
+        "--before-duration": `${speed * 2}s`,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function SectionHead({ num, tag }) {
   return (
     <div className="section-head">
       <span className="section-ghost" aria-hidden="true">{num.replace("/", "")}</span>
       <span className="section-num">{num}</span>
-      <span className="section-tag">{tag}</span>
+      <GlitchText className="section-tag">{tag}</GlitchText>
       <span className="section-line" aria-hidden="true" />
     </div>
   );
@@ -1318,6 +1489,7 @@ export default function App() {
     <div className="site">
       <CursorGlow />
       <div className="bg-grid" aria-hidden="true" />
+      <BgCursorGrid />
       <div className="bg-aurora" aria-hidden="true" />
       <div className="bg-orb bg-orb--1" aria-hidden="true" />
       <div className="bg-orb bg-orb--2" aria-hidden="true" />
@@ -1333,6 +1505,7 @@ export default function App() {
 
         <div className="hero-inner">
           <div className="hero-badge">
+            <span className="star-border" aria-hidden="true" />
             <span className="hero-badge-dot" />
             <span className="hero-badge-text">SYSTEM · ONLINE</span>
           </div>
@@ -1461,7 +1634,7 @@ export default function App() {
           </h2>
           <div className="connect-grid">
             <Magnetic>
-              <TiltCard as="a" className="connect-card" max={8} href="https://www.linkedin.com/in/josephfraser/"
+              <TiltCard as="a" className="connect-card glare" max={8} href="https://www.linkedin.com/in/josephfraser/"
                  target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
                 <svg className="connect-logo" viewBox="0 0 24 24" fill="rgba(255,255,255,0.88)" aria-hidden="true">
                   <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.852 3.37-1.852 3.601 0 4.267 2.37 4.267 5.455v6.288zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
@@ -1471,14 +1644,14 @@ export default function App() {
               </TiltCard>
             </Magnetic>
             <Magnetic>
-              <TiltCard as="a" className="connect-card" max={8} href="mailto:connect@imjoey.me" aria-label="Email connect@imjoey.me">
+              <TiltCard as="a" className="connect-card glare" max={8} href="mailto:connect@imjoey.me" aria-label="Email connect@imjoey.me">
                 <img src="https://cdn.simpleicons.org/gmail/ffffff" alt="" className="connect-logo" />
                 <span className="connect-label">Email</span>
                 <span className="connect-handle">connect@imjoey.me</span>
               </TiltCard>
             </Magnetic>
             <Magnetic>
-              <TiltCard as="a" className="connect-card" max={8} href="https://github.com/joeyjaf"
+              <TiltCard as="a" className="connect-card glare" max={8} href="https://github.com/joeyjaf"
                  target="_blank" rel="noopener noreferrer" aria-label="GitHub">
                 <img src="https://cdn.simpleicons.org/github/ffffff" alt="" className="connect-logo" />
                 <span className="connect-label">GitHub</span>
