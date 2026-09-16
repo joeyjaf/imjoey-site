@@ -2040,6 +2040,7 @@ export default function App() {
     { role: "Pizza Chef & Machine Mechanic", place: "Madras Bowl · Madras, OR", blurb: "Made the pizzas and fixed the pinsetters between rushes." },
     { role: "Janitor", place: "The Store · Culver, OR", blurb: "Closed up and cleaned the local market every night." },
     { role: "Park Ranger", place: "The Cove Palisades · Culver, OR", blurb: "Worked the state park where the canyon meets the lake." },
+    { role: "Blow Molding Injection Operator", place: "Earth2o · Culver, OR", blurb: "Ran the molding machines turning out bottles at the spring water plant." },
     { role: "Field Hand", place: "Onion Fields · Culver, OR", blurb: "Where it started — long days in the Central Oregon dirt." },
   ];
 
