@@ -1050,14 +1050,41 @@ function SkillsConsole({ categories }) {
 /* Expandable partner roster + program facts under a role */
 function RolePartners({ details }) {
   const [open, setOpen] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const toggleRef = useRef(null);
   const { stats, partners, source } = details;
+
+  /* shine sweeps across the toggle each time it scrolls into view (any device)
+     until the drawer has been opened once — nudges people to click it */
+  useEffect(() => {
+    const el = toggleRef.current;
+    if (!el || opened || REDUCED_MOTION) return;
+    const done = (e) => { if (e.animationName === "rp-shine") el.classList.remove("glare--sweep"); };
+    const obs = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) return;
+        el.classList.remove("glare--sweep");
+        void el.offsetWidth; // restart the animation
+        el.classList.add("glare--sweep");
+      },
+      { threshold: 0.6, rootMargin: "0px 0px -12% 0px" }
+    );
+    obs.observe(el);
+    el.addEventListener("animationend", done);
+    return () => {
+      obs.disconnect();
+      el.removeEventListener("animationend", done);
+    };
+  }, [opened]);
+
   return (
     <div className={`rp${open ? " rp--open" : ""}`}>
       <button
+        ref={toggleRef}
         type="button"
-        className="rp-toggle"
+        className="rp-toggle glare"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); setOpened(true); }}
       >
         <span className="rp-toggle-prompt">$</span>
         <span className="rp-toggle-text">

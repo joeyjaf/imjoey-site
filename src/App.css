@@ -1941,6 +1941,31 @@ a.footer-url:hover {
   cursor: pointer;
   text-align: left;
   transition: border-color 250ms ease, box-shadow 250ms ease, background 250ms ease;
+  --glare-color: rgba(233,213,255,0.38);
+}
+/* wide, short bar: the shared diagonal glare barely crosses it, so the
+   toggle gets a slanted left→right band instead */
+.rp-toggle.glare::before {
+  background: linear-gradient(
+    105deg,
+    transparent 62%,
+    var(--glare-color) 70%,
+    transparent 78%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  background-position: 115% 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rp-toggle.glare:hover::before { background-position: 45% 0; }
+}
+/* scroll-triggered shine runs on every device, not just touch */
+.rp-toggle.glare--sweep::before {
+  animation: rp-shine 1400ms cubic-bezier(0.45, 0, 0.25, 1) 150ms both;
+}
+@keyframes rp-shine {
+  from { background-position: 115% 0; }
+  to   { background-position: 45% 0; }
 }
 .rp-toggle:hover,
 .rp--open .rp-toggle {
