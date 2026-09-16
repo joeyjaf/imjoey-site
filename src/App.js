@@ -459,6 +459,392 @@ function BgCursorGrid({
 }
 
 /* ─────────────────────────────────────────────
+   PIXEL PORTRAIT — photo resampled into a purple
+   pixel grid; pixels repel from cursor/touch, spring home
+───────────────────────────────────────────── */
+const PX_GRID = 68;          // cells across the portrait
+const PX_PAD = 0.22;         // canvas overflow around portrait (fraction of size)
+const TEETH_RANGE = [0.86, 0.93]; // smile cells: evened out, never pure white
+const PX_RAMP = [            // luminance → color (dark shirt fades into page)
+  [0.00, [20, 8, 40]],
+  [0.30, [76, 29, 149]],
+  [0.55, [124, 58, 237]],
+  [0.80, [196, 132, 252]],
+  [1.00, [250, 245, 255]],
+];
+
+function rampColor(t) {
+  for (let i = 1; i < PX_RAMP.length; i++) {
+    const [p1, c1] = PX_RAMP[i];
+    if (t <= p1) {
+      const [p0, c0] = PX_RAMP[i - 1];
+      const k = (t - p0) / (p1 - p0 || 1);
+      return c0.map((v, j) => Math.round(v + (c1[j] - v) * k));
+    }
+  }
+  return PX_RAMP[PX_RAMP.length - 1][1];
+}
+
+/* flood-fill the (smooth, light, warm) photo backdrop from the edges */
+function buildBackgroundMask(data, n) {
+  const bg = new Uint8Array(n * n);
+  const rgb = (i) => [data[i * 4], data[i * 4 + 1], data[i * 4 + 2]];
+  const bgLike = ([r, g, b]) => {
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    return lum > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 80;
+  };
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const stack = [];
+  for (let i = 0; i < n; i++) {
+    stack.push(i);                              // top row
+    stack.push(i * n);                          // left column
+    stack.push(i * n + n - 1);                  // right column
+  }
+  const seeded = new Uint8Array(n * n);
+  const queue = stack.filter((i) => bgLike(rgb(i)));
+  queue.forEach((i) => { bg[i] = 1; seeded[i] = 1; });
+  while (queue.length) {
+    const i = queue.pop();
+    const x = i % n, y = (i / n) | 0;
+    const c = rgb(i);
+    const nb = [x > 0 && i - 1, x < n - 1 && i + 1, y > 0 && i - n, y < n - 1 && i + n];
+    for (const j of nb) {
+      if (j === false || bg[j]) continue;
+      const cj = rgb(j);
+      if (bgLike(cj) && dist(c, cj) < 14) {
+        bg[j] = 1;
+        queue.push(j);
+      }
+    }
+  }
+  return bg;
+}
+
+function PixelPortrait({ src, active, onReady }) {
+  const wrapRef = useRef(null);
+  const canvasRef = useRef(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const canvas = canvasRef.current;
+    if (!wrap || !canvas) return;
+    const ctx = canvas.getContext("2d");
+    let particles = [];
+    let solid = new Uint8Array(0); // grid cells with visible portrait pixels
+    let dust = [];
+    let size = 0, pad = 0, cell = 0, dpr = 1;
+    let rafId = 0, running = false, visible = true;
+    let introStart = 0;
+    const pointer = { x: -9999, y: -9999, nx: 0, ny: 0, on: false, sx: 0, sy: 0 };
+    const ripples = [];
+    let glitch = { until: 0, row0: 0, row1: 0, dx: 0, next: 2500 };
+
+    const resize = () => {
+      size = wrap.clientWidth;
+      pad = size * PX_PAD;
+      cell = size / PX_GRID;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const full = size + pad * 2;
+      canvas.width = Math.round(full * dpr);
+      canvas.height = Math.round(full * dpr);
+      canvas.style.width = `${full}px`;
+      canvas.style.height = `${full}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const build = (img) => {
+      const n = PX_GRID;
+      const off = document.createElement("canvas");
+      off.width = n; off.height = n;
+      const octx = off.getContext("2d", { willReadFrequently: true });
+      octx.imageSmoothingQuality = "high";
+      octx.drawImage(img, 0, 0, n, n);
+      const { data } = octx.getImageData(0, 0, n, n);
+      const bg = buildBackgroundMask(data, n);
+
+      const lums = [];
+      for (let i = 0; i < n * n; i++) {
+        if (bg[i]) continue;
+        lums.push(0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]);
+      }
+      const sorted = [...lums].sort((a, b) => a - b);
+      const lo = sorted[Math.floor(sorted.length * 0.04)] || 0;
+      const hi = sorted[Math.floor(sorted.length * 0.995)] || 255;
+
+      particles = [];
+      solid = new Uint8Array(n * n);
+      for (let y = 0; y < n; y++) {
+        for (let x = 0; x < n; x++) {
+          const i = y * n + x;
+          if (bg[i]) continue;
+          const raw = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+          const cx = (x + 0.5) / n, cy = (y + 0.5) / n;
+          const teeth = cx > 0.45 && cx < 0.565 && cy > 0.527 && cy < 0.545;
+          const base = Math.min(1, Math.max(0, (raw - lo) / (hi - lo || 1))) ** 2.1;
+          const t = teeth ? Math.min(TEETH_RANGE[1], Math.max(TEETH_RANGE[0], base)) : base; // even out the smile
+          const [r, g, b] = rampColor(t);
+          const edge =
+            (x > 0 && bg[i - 1]) || (x < n - 1 && bg[i + 1]) ||
+            (y > 0 && bg[i - n]) || (y < n - 1 && bg[i + n]);
+          // bottom of frame dissolves into the page
+          const fadeY = Math.min(1, Math.max(0, (n - 1 - y) / (n * 0.28)));
+          const alpha = Math.min(1, 0.32 + t * 0.9) * (0.2 + 0.8 * fadeY);
+          const ang = Math.random() * Math.PI * 2;
+          const far = 0.6 + Math.random() * 0.8;
+          if (alpha > 0.3) solid[i] = 1;
+          particles.push({
+            gx: x, gy: y, t, edge, alpha,
+            color: `rgb(${r},${g},${b})`,
+            ox: Math.cos(ang) * far, oy: Math.sin(ang) * far, // in portrait units, scaled at draw
+            vx: 0, vy: 0,
+            delay: (y / n) * 700 + Math.random() * 450,
+            tw: Math.random() * Math.PI * 2,
+          });
+        }
+      }
+      // start scattered (offsets are multiplied by size once sized)
+      particles.forEach((p) => { p.ox *= size; p.oy *= size; });
+
+      const edges = particles.filter((p) => p.edge && p.t > 0.25);
+      dust = Array.from({ length: Math.min(70, edges.length) }, () => spawnDust(edges));
+      dust.forEach((d) => { d.life = Math.random() * d.max; });
+      particles.edges = edges;
+    };
+
+    const spawnDust = (edges) => {
+      const p = edges[(Math.random() * edges.length) | 0];
+      return {
+        x: p.gx * cell, y: p.gy * cell, color: p.color,
+        vx: (Math.random() - 0.5) * 0.25, vy: -0.1 - Math.random() * 0.3,
+        life: 0, max: 90 + Math.random() * 160,
+      };
+    };
+
+    const step = (now) => {
+      if (!introStart) introStart = now;
+      const el = now - introStart;
+      const reduced = REDUCED_MOTION;
+      const full = size + pad * 2;
+      ctx.clearRect(0, 0, full, full);
+
+      // glitch band every few seconds
+      if (!reduced && el > glitch.next) {
+        const r0 = (Math.random() * PX_GRID * 0.8) | 0;
+        glitch = {
+          until: el + 110 + Math.random() * 90,
+          row0: r0, row1: r0 + 1 + ((Math.random() * 3) | 0),
+          dx: (Math.random() < 0.5 ? -1 : 1) * cell * (1.5 + Math.random() * 2.5),
+          next: el + 3200 + Math.random() * 4200,
+        };
+      }
+      const glitching = el < glitch.until;
+
+      // scan line sweeping down
+      const scanY = ((el / 3600) % 1.4) * PX_GRID - PX_GRID * 0.2;
+
+      // scroll-away scatter
+      const heroH = window.innerHeight || 800;
+      const scatter = reduced ? 0 : Math.min(1, Math.max(0, window.scrollY / heroH));
+
+      // pointer (local, portrait space)
+      const R = size * 0.14;
+      pointer.sx += ((pointer.on ? pointer.nx : 0) - pointer.sx) * 0.06;
+      pointer.sy += ((pointer.on ? pointer.ny : 0) - pointer.sy) * 0.06;
+
+      const sq = cell * 0.8;
+      for (let k = 0; k < particles.length; k++) {
+        const p = particles[k];
+        const hx = p.gx * cell;
+        const hy = p.gy * cell;
+        let alphaMul = 1;
+
+        if (reduced) {
+          p.ox = 0; p.oy = 0;
+        } else if (el < p.delay || !activeRef.current) {
+          alphaMul = 0;
+        } else {
+          // target: 3D-ish parallax (bright = nearer) + idle breathing + scroll scatter
+          const depth = p.t - 0.5;
+          let tx = pointer.sx * depth * cell * 3.2;
+          let ty = pointer.sy * depth * cell * 2.4;
+          tx += Math.sin(el / 1400 + p.gy * 0.35) * cell * 0.18;
+          if (scatter > 0) {
+            tx += Math.cos(p.tw) * scatter * size * 0.5;
+            ty += (Math.sin(p.tw) - 1.2) * scatter * size * 0.4;
+          }
+
+          let ax = (tx - p.ox) * 0.055;
+          let ay = (ty - p.oy) * 0.055;
+
+          // cursor / finger repulsion
+          if (pointer.on) {
+            const dx = hx + p.ox - pointer.x;
+            const dy = hy + p.oy - pointer.y;
+            const d = Math.hypot(dx, dy);
+            if (d < R && d > 0.01) {
+              const f = (1 - d / R) ** 2 * cell * 0.7;
+              ax += (dx / d) * f;
+              ay += (dy / d) * f;
+            }
+          }
+          // tap ripples
+          for (const rp of ripples) {
+            const dx = hx - rp.x, dy = hy - rp.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const band = Math.abs(d - rp.r);
+            if (band < cell * 4) {
+              const f = (1 - band / (cell * 4)) * rp.power * cell * 1.3;
+              ax += (dx / d) * f;
+              ay += (dy / d) * f;
+            }
+          }
+
+          p.vx = (p.vx + ax) * 0.84;
+          p.vy = (p.vy + ay) * 0.84;
+          p.ox += p.vx;
+          p.oy += p.vy;
+          alphaMul = Math.min(1, (el - p.delay) / 500);
+        }
+
+        let a = p.alpha * alphaMul;
+        if (p.edge) a *= 0.65 + 0.35 * Math.sin(el / 380 + p.tw);
+        if (a <= 0.01) continue;
+
+        let dxg = 0;
+        if (glitching && p.gy >= glitch.row0 && p.gy <= glitch.row1) dxg = glitch.dx;
+        const scan = Math.max(0, 1 - Math.abs(p.gy - scanY) / 2.2);
+
+        ctx.globalAlpha = Math.min(1, a + scan * 0.35);
+        ctx.fillStyle = scan > 0.55 ? "#f3e8ff" : p.color;
+        ctx.fillRect(pad + hx + p.ox + dxg, pad + hy + p.oy, sq, sq);
+      }
+
+      // dissolving edge dust
+      if (!reduced && activeRef.current && el > 900) {
+        const edges = particles.edges || [];
+        for (let k = 0; k < dust.length; k++) {
+          const d = dust[k];
+          d.life++;
+          d.x += d.vx; d.y += d.vy;
+          if (d.life > d.max && edges.length) { dust[k] = spawnDust(edges); continue; }
+          const lifeT = d.life / d.max;
+          ctx.globalAlpha = Math.sin(lifeT * Math.PI) * 0.45;
+          ctx.fillStyle = d.color;
+          const s = sq * (1 - lifeT * 0.5);
+          ctx.fillRect(pad + d.x, pad + d.y, s, s);
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        ripples[i].r += cell * 1.6;
+        ripples[i].power *= 0.93;
+        if (ripples[i].power < 0.05) ripples.splice(i, 1);
+      }
+
+      if (reduced) { running = false; return; }
+      rafId = requestAnimationFrame(step);
+    };
+
+    const start = () => {
+      if (running || !visible || !particles.length) return;
+      running = true;
+      rafId = requestAnimationFrame(step);
+    };
+    const stop = () => { running = false; cancelAnimationFrame(rafId); };
+
+    const toLocal = (clientX, clientY) => {
+      const r = wrap.getBoundingClientRect();
+      return { x: clientX - r.left, y: clientY - r.top, w: r.width };
+    };
+    // true only when the pointer sits on (or within a cell of) a visible pixel
+    const overPortrait = (x, y) => {
+      if (!cell || !solid.length) return false;
+      const gx = Math.floor(x / cell), gy = Math.floor(y / cell);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const cx = gx + dx, cy = gy + dy;
+          if (cx >= 0 && cy >= 0 && cx < PX_GRID && cy < PX_GRID && solid[cy * PX_GRID + cx]) return true;
+        }
+      }
+      return false;
+    };
+    const onPointerMove = (e) => {
+      const { x, y, w } = toLocal(e.clientX, e.clientY);
+      pointer.x = x; pointer.y = y;
+      const rx = (x - w / 2) / (w / 2), ry = (y - w / 2) / (w / 2);
+      pointer.nx = Math.max(-1.5, Math.min(1.5, rx));
+      pointer.ny = Math.max(-1.5, Math.min(1.5, ry));
+      pointer.on = overPortrait(x, y);
+    };
+    const onPointerLeave = () => { pointer.on = false; };
+    const onPointerDown = (e) => {
+      const { x, y } = toLocal(e.clientX, e.clientY);
+      if (!overPortrait(x, y)) return;
+      ripples.push({ x, y, r: 0, power: 1 });
+      onPointerMove(e);
+    };
+    const onPointerUp = (e) => { if (e.pointerType !== "mouse") pointer.on = false; };
+
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => {
+      resize();
+      build(img);
+      onReady && onReady();
+      start();
+    };
+    img.src = src;
+
+    const ro = new ResizeObserver(() => {
+      const prev = size;
+      resize();
+      if (prev && prev !== size && particles.length) {
+        const k = size / prev;
+        particles.forEach((p) => { p.ox *= k; p.oy *= k; });
+      }
+      if (REDUCED_MOTION && particles.length) step(performance.now());
+    });
+    ro.observe(wrap);
+
+    const io = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      visible ? start() : stop();
+    });
+    io.observe(canvas);
+
+    if (CAN_HOVER) {
+      window.addEventListener("pointermove", onPointerMove, { passive: true });
+      document.documentElement.addEventListener("pointerleave", onPointerLeave);
+    }
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+
+    return () => {
+      stop();
+      ro.disconnect();
+      io.disconnect();
+      window.removeEventListener("pointermove", onPointerMove);
+      document.documentElement.removeEventListener("pointerleave", onPointerLeave);
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [src, onReady]);
+
+  return (
+    <div className="pixel-portrait" ref={wrapRef}>
+      <canvas ref={canvasRef} className="pixel-portrait-canvas" aria-hidden="true" />
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
    CONTENT PRIMITIVES
 ───────────────────────────────────────────── */
 function GlowCursor({ done }) {
@@ -1674,18 +2060,18 @@ export default function App() {
             </div>
             <div className="hero-photo-wrap">
               <span className="hero-photo-halo" aria-hidden="true" />
+              <PixelPortrait src="/joey.png" active={nameDone} />
+              {/* real photo stays in the DOM for crawlers / screen readers */}
               <picture>
                 <source srcSet="/joey.webp" type="image/webp" />
                 <img
                   src="/joey.png"
                   alt="Joey Fraser"
-                  className="hero-photo"
+                  className="hero-photo hero-photo--sr"
                   width="512"
                   height="512"
-                  fetchPriority="high"
                 />
               </picture>
-              <span className="hero-photo-ring" aria-hidden="true" />
             </div>
           </div>
         </div>

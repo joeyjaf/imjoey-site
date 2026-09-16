@@ -635,22 +635,39 @@ button { font: inherit; }
 
 .hero-photo-wrap {
   position: relative;
-  width: clamp(150px, 17vw, 200px);
+  width: clamp(220px, 26vw, 300px);
   aspect-ratio: 1;
-  transform: translate(calc(var(--hpx) * -10px), calc(var(--hpy) * -8px));
-  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
-  animation: photo-float 7s ease-in-out infinite;
+  margin-top: -12px;
 }
-@keyframes photo-float {
-  0%, 100% { margin-top: 0; }
-  50% { margin-top: -10px; }
+
+/* pixel portrait — canvas overflows the box so pixels can fly out */
+.pixel-portrait {
+  position: absolute;
+  inset: 0;
+}
+.pixel-portrait-canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+.hero-photo--sr {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .hero-photo-halo {
   position: absolute;
-  inset: -26%;
+  inset: -10%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(124,58,237,0.30) 0%, transparent 65%);
+  background: radial-gradient(circle at 50% 42%, rgba(124,58,237,0.22) 0%, transparent 62%);
   filter: blur(18px);
   animation: halo-pulse 5s ease-in-out infinite;
 }
