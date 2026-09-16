@@ -1884,3 +1884,24 @@ a.footer-url:hover {
   .roles-beam-comet { display: none; }
   .magnetic { transition: none; }
 }
+
+/* Company wordmark in place of a text role title */
+.role-logo {
+  display: block;
+  height: clamp(24px, 3vw, 32px);
+  width: auto;
+  color: var(--fg);
+  filter: drop-shadow(0 0 18px rgba(168,85,247,0.35));
+  transform: translateY(3px);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

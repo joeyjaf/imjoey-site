@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import "./App.css";
+import { ReactComponent as WhimLogo } from "./whim-logo.svg";
 
 const CAN_HOVER =
   typeof window !== "undefined" &&
@@ -479,7 +480,7 @@ function SkillLogo({ src, name }) {
 /* ── ABOUT: scroll-driven word reveal ── */
 const ABOUT_SEGMENTS = [
   { t: "I work at " },
-  { t: "Fragile,", a: true },
+  { t: "Whim,", a: true },
   { t: " a company that powers hardware subscription programs for some of the world's leading technology brands. As " },
   { t: "Head of Risk,", a: true },
   { t: " I oversee our entire risk and recovery function, leading strategy across underwriting, delinquency management, and loss mitigation. I design and implement data-driven systems that optimize account performance, streamline recovery operations, and proactively reduce exposure across our portfolio. My focus is on building scalable processes that protect unit economics while preserving customer relationships and long-term brand value." },
@@ -660,7 +661,7 @@ function SkillsConsole({ categories }) {
 /* ─────────────────────────────────────────────
    WORK — drawing timeline
 ───────────────────────────────────────────── */
-function RoleCard({ number, title, subtitle, meta, bullets, delay = 0 }) {
+function RoleCard({ number, title, logo: Logo, subtitle, meta, bullets, delay = 0 }) {
   const [ref, inView] = useInView(0.08);
   return (
     <div
@@ -676,7 +677,14 @@ function RoleCard({ number, title, subtitle, meta, bullets, delay = 0 }) {
         <div className="role-number" aria-hidden="true">{number}</div>
         <div className="role-content">
           <div className="role-head">
-            <h2 className="role-title">{title}</h2>
+            <h2 className="role-title">
+              {Logo ? (
+                <>
+                  <Logo className="role-logo" aria-hidden="true" focusable="false" />
+                  <span className="sr-only">{title}</span>
+                </>
+              ) : title}
+            </h2>
             {subtitle && <span className="role-subtitle">{subtitle}</span>}
           </div>
           {meta && <p className="role-meta">{meta}</p>}
@@ -905,7 +913,7 @@ function Hud() {
           </span>
           <span className="hud-brand-text">
             <span className="hud-brand-name">Joey Fraser</span>
-            <span className="hud-brand-role">Head of Risk · Fragile</span>
+            <span className="hud-brand-role">Head of Risk · Whim</span>
           </span>
         </a>
 
@@ -1461,13 +1469,14 @@ export default function App() {
   const roles = [
     {
       number: "01",
-      title: "Fragile",
+      title: "Whim",
+      logo: WhimLogo,
       subtitle: "Head of Risk",
       meta: "San Francisco, CA · Mar 2023–Present",
       bullets: [
         "Joined as employee #5 and scaled the company from $4K to $2M+ MRR — operating across merchant partnerships, customer success, risk & recovery, logistics, and underwriting as the org grew past 50 employees",
-        "Built Fragile's underwriting system from scratch using institution-defined key vectors; framework was independently validated via data and fully adopted company-wide as core risk infrastructure",
-        "Led customer support and payment recovery for Fragile's portfolio of merchant partners — managing overdue subscriptions, payment commitments, return coordination, and escalation prevention through SMS, email, and phone",
+        "Built Whim's underwriting system from scratch using institution-defined key vectors; framework was independently validated via data and fully adopted company-wide as core risk infrastructure",
+        "Led customer support and payment recovery for Whim's portfolio of merchant partners — managing overdue subscriptions, payment commitments, return coordination, and escalation prevention through SMS, email, and phone",
         "Personally recovered over $1.5M in assets through direct risk operations; collaborated with legal counsel and a private investigator on high-stakes cases",
         "Designed and A/B tested risk strategies and operational initiatives; hired 20+ employees and currently manage a direct team of 11 across risk, recovery, and operations",
       ],
@@ -1571,7 +1580,7 @@ export default function App() {
 
           <div className={`hero-below${nameDone ? " hero-below--show" : ""}`}>
             <div className="hero-tags">
-              <span className="hero-tag">Head of Risk · Fragile</span>
+              <span className="hero-tag">Head of Risk · Whim</span>
               <span className="hero-tag hero-tag--ghost">Real Estate · Waco, TX</span>
               <span className="hero-tag hero-tag--ghost">Builder</span>
             </div>
