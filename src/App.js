@@ -661,7 +661,70 @@ function SkillsConsole({ categories }) {
 /* ─────────────────────────────────────────────
    WORK — drawing timeline
 ───────────────────────────────────────────── */
-function RoleCard({ number, title, logo: Logo, subtitle, meta, bullets, delay = 0 }) {
+/* Expandable partner roster + program facts under a role */
+function RolePartners({ details }) {
+  const [open, setOpen] = useState(false);
+  const { stats, partners, source } = details;
+  return (
+    <div className={`rp${open ? " rp--open" : ""}`}>
+      <button
+        type="button"
+        className="rp-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="rp-toggle-prompt">$</span>
+        <span className="rp-toggle-text">
+          {open ? "hide partners" : "ls ./partners"}
+        </span>
+        <span className="rp-toggle-count">{partners.length} brands</span>
+        <span className="rp-toggle-chevron" aria-hidden="true">↓</span>
+      </button>
+
+      <div className="rp-drawer" aria-hidden={!open}>
+        <div className="rp-inner">
+          <div className="rp-stats">
+            {stats.map((st, i) => (
+              <div className="rp-stat" key={st.label} style={{ "--i": i }}>
+                <span className="rp-stat-value">{st.value}</span>
+                <span className="rp-stat-label">{st.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="rp-grid">
+            {partners.map((pt, i) => (
+              <div className="rp-tile" key={pt.name} style={{ "--i": i + stats.length }}>
+                <span className="rp-tile-logo">
+                  <img src={pt.logo} alt={pt.name} loading="lazy" />
+                </span>
+                <span className="rp-tile-meta">{pt.category}</span>
+              </div>
+            ))}
+          </div>
+
+          {source && (
+            <p className="rp-source">
+              {source.text}
+              {source.link && (
+                <a
+                  href={source.link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  tabIndex={open ? 0 : -1}
+                >
+                  {source.link.label}
+                </a>
+              )}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoleCard({ number, title, logo: Logo, subtitle, meta, bullets, details, delay = 0 }) {
   const [ref, inView] = useInView(0.08);
   return (
     <div
@@ -691,6 +754,7 @@ function RoleCard({ number, title, logo: Logo, subtitle, meta, bullets, delay = 
           <ul className="role-bullets">
             {bullets.map((b, i) => <li key={i}>{b}</li>)}
           </ul>
+          {details && <RolePartners details={details} />}
         </div>
       </TiltCard>
     </div>
@@ -1471,10 +1535,34 @@ export default function App() {
       number: "01",
       title: "Whim",
       logo: WhimLogo,
+      details: {
+        stats: [
+          { value: "100K+", label: "Americans rent with Whim" },
+          { value: "+22%", label: "Net conversion lift for partners" },
+          { value: "89%", label: "Wouldn't have bought otherwise" },
+          { value: "100%", label: "Of fully launched partners still live" },
+        ],
+        partners: [
+          { name: "Tonal", category: "Smart home gym", logo: "/partner-logos/tonal.svg" },
+          { name: "Eight Sleep", category: "Sleep tech", logo: "/partner-logos/eight-sleep.svg" },
+          { name: "Terra Kaffe", category: "Espresso", logo: "/partner-logos/terra-kaffe.svg" },
+          { name: "xBloom", category: "Coffee brewing", logo: "/partner-logos/xbloom.svg" },
+          { name: "eufy", category: "Robot vacuums", logo: "/partner-logos/eufy.svg" },
+          { name: "Cradlewise", category: "Smart crib", logo: "/partner-logos/cradlewise.svg" },
+          { name: "Reencle", category: "Food recycler", logo: "/partner-logos/reencle.svg" },
+          { name: "Even Realities", category: "Smart glasses", logo: "/partner-logos/even-realities.svg" },
+          { name: "Reviver", category: "Digital plates", logo: "/partner-logos/reviver.svg" },
+          { name: "Impact", category: "Dog crates", logo: "/partner-logos/impact.png" },
+        ],
+        source: {
+          text: "Month-to-month rentals, live inside each brand's own checkout · figures via ",
+          link: { label: "whim.com", href: "https://www.whim.com" },
+        },
+      },
       subtitle: "Head of Risk",
       meta: "San Francisco, CA · Mar 2023–Present",
       bullets: [
-        "Joined as employee #5 and scaled the company from $4K to $2M+ MRR — operating across merchant partnerships, customer success, risk & recovery, logistics, and underwriting as the org grew past 50 employees",
+        "Joined as employee #5 and scaled the company from $4K to $3.5M+ MRR — operating across merchant partnerships, customer success, risk & recovery, logistics, and underwriting as the org grew past 50 employees",
         "Built Whim's underwriting system from scratch using institution-defined key vectors; framework was independently validated via data and fully adopted company-wide as core risk infrastructure",
         "Led customer support and payment recovery for Whim's portfolio of merchant partners — managing overdue subscriptions, payment commitments, return coordination, and escalation prevention through SMS, email, and phone",
         "Personally recovered over $1.5M in assets through direct risk operations; collaborated with legal counsel and a private investigator on high-stakes cases",
