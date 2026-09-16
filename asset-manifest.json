@@ -1,15 +1,16 @@
 {
   "files": {
-    "main.css": "/static/css/main.e4574300.css",
-    "main.js": "/static/js/main.33fec4af.js",
+    "main.css": "/static/css/main.ec3c1bad.css",
+    "main.js": "/static/js/main.48e87eda.js",
     "static/js/453.0ddd8556.chunk.js": "/static/js/453.0ddd8556.chunk.js",
     "index.html": "/index.html",
-    "main.e4574300.css.map": "/static/css/main.e4574300.css.map",
-    "main.33fec4af.js.map": "/static/js/main.33fec4af.js.map",
+    "static/media/whim-logo.svg": "/static/media/whim-logo.5c451a2e73dfbfa53b7a00ca09646ec3.svg",
+    "main.ec3c1bad.css.map": "/static/css/main.ec3c1bad.css.map",
+    "main.48e87eda.js.map": "/static/js/main.48e87eda.js.map",
     "453.0ddd8556.chunk.js.map": "/static/js/453.0ddd8556.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.e4574300.css",
-    "static/js/main.33fec4af.js"
+    "static/css/main.ec3c1bad.css",
+    "static/js/main.48e87eda.js"
   ]
 }

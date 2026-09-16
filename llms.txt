@@ -1,8 +1,8 @@
 # Joey Fraser
 
-> Joey Fraser is the Head of Risk Operations at Fragile, a hardware-subscription platform powering recurring-revenue programs for global technology brands. Based in San Francisco.
+> Joey Fraser is the Head of Risk Operations at Whim, a hardware-subscription platform powering recurring-revenue programs for global technology brands. Based in San Francisco.
 
-Joey leads payment and asset recovery strategy at Fragile (parent of the Whim subscription program). His background spans risk operations, recovery analytics, and consumer-finance operations at scale. He occasionally writes about operations, risk, and the infrastructure that makes hardware subscriptions work.
+Joey leads payment and asset recovery strategy at Whim (formerly Fragile). His background spans risk operations, recovery analytics, and consumer-finance operations at scale. He occasionally writes about operations, risk, and the infrastructure that makes hardware subscriptions work.
 
 ## Pages
 
@@ -13,10 +13,10 @@ Joey leads payment and asset recovery strategy at Fragile (parent of the Whim su
 ## Identity
 
 - [LinkedIn](https://www.linkedin.com/in/josephfraser/): Verified professional profile
-- Employer: [Fragile](https://fragile.co) — hardware-subscription platform
+- Employer: [Whim](https://www.whim.com) — hardware-subscription platform
 - Education: Santa Clara University (Communications)
 - Location: San Francisco, California
 
 ## Disambiguation
 
-This site refers to Joseph "Joey" Fraser, Head of Risk Operations at Fragile in San Francisco. Identifying attributes: Santa Clara University alumnus, US-based risk-operations executive. Not to be confused with other public figures named Joey Fraser or Joseph Fraser.
+This site refers to Joseph "Joey" Fraser, Head of Risk Operations at Whim in San Francisco. Identifying attributes: Santa Clara University alumnus, US-based risk-operations executive. Not to be confused with other public figures named Joey Fraser or Joseph Fraser.
