@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Ledger</title>
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+<meta name="referrer" content="no-referrer" />
+<meta name="description" content="Private." />
+<link rel="icon" href="/favicon.png" />
+<!-- Self-hosted. The Fontshare CSS API silently drops every f[] after the first,
+     so the old two-family request returned Clash Display only and Switzer never loaded. -->
+<link rel="preload" href="/fonts/switzer-400.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="/fonts/clash-display-600.woff2" as="font" type="font/woff2" crossorigin />
+<style>
+  @font-face { font-family:'Switzer'; src:url('/fonts/switzer-400.woff2') format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
+  @font-face { font-family:'Switzer'; src:url('/fonts/switzer-500.woff2') format('woff2'); font-weight:500; font-style:normal; font-display:swap; }
+  @font-face { font-family:'Switzer'; src:url('/fonts/switzer-600.woff2') format('woff2'); font-weight:600; font-style:normal; font-display:swap; }
+  @font-face { font-family:'Clash Display'; src:url('/fonts/clash-display-500.woff2') format('woff2'); font-weight:500; font-style:normal; font-display:swap; }
+  @font-face { font-family:'Clash Display'; src:url('/fonts/clash-display-600.woff2') format('woff2'); font-weight:600; font-style:normal; font-display:swap; }
+  @font-face { font-family:'JetBrains Mono'; src:url('/fonts/jetbrains-mono-latin.woff2') format('woff2'); font-weight:400 500; font-style:normal; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:'JetBrains Mono'; src:url('/fonts/jetbrains-mono-latin-ext.woff2') format('woff2'); font-weight:400 500; font-style:normal; font-display:swap; unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+</style>
+<link rel="stylesheet" href="./assets/style.css" />
+</head>
+<body data-palette="#9085e9,#d95926,#199e70,#3987e5,#c98500,#d55181,#008300,#e66767">
+
+<!-- ───────────────────────── GATE ───────────────────────── -->
+<div id="gate" class="gate">
+  <div class="gate-card">
+    <div class="gate-mark" aria-hidden="true"></div>
+    <h1 class="gate-title">Ledger</h1>
+    <p class="gate-sub">Enter passcode</p>
+    <form id="gate-form" autocomplete="off">
+      <input id="gate-input" class="gate-input" type="password" inputmode="numeric"
+             pattern="[0-9]*" autocomplete="off" aria-label="Passcode" spellcheck="false" />
+      <button class="gate-btn" type="submit">Unlock</button>
+    </form>
+    <p id="gate-err" class="gate-err" role="alert" hidden>Wrong passcode.</p>
+    <p class="gate-note" id="gate-mode"></p>
+  </div>
+</div>
+
+<!-- ───────────────────────── APP ───────────────────────── -->
+<main id="app" class="app" hidden>
+
+  <header class="topbar">
+    <div class="topbar-l">
+      <span class="brand">Ledger</span>
+      <span id="asof" class="asof"></span>
+    </div>
+    <div class="topbar-r">
+      <button class="ghost-btn" id="btn-refresh" title="Re-read the latest published pull">Refresh</button>
+      <button class="ghost-btn" id="btn-export" title="Download your settings as JSON">Export</button>
+      <button class="ghost-btn" id="btn-import" title="Load settings from JSON">Import</button>
+      <button class="ghost-btn" id="btn-lock">Lock</button>
+    </div>
+  </header>
+
+  <div id="demo-banner" class="demo-banner" hidden>
+    <strong>Demo data.</strong> Nothing here is real — this is the design pass. Live figures land after the Era pull.
+  </div>
+
+  <!-- one filter row, scopes everything below it -->
+  <div class="filterbar" role="group" aria-label="Date range">
+    <span class="filterbar-label">Range</span>
+    <div class="seg" id="range-seg"></div>
+    <div class="filterbar-spacer"></div>
+    <nav class="tabs" id="tabs"></nav>
+  </div>
+
+  <div id="view-overview" class="view"></div>
+  <div id="view-recurring" class="view" hidden></div>
+  <div id="view-categories" class="view" hidden></div>
+  <div id="view-windfalls" class="view" hidden></div>
+  <div id="view-transactions" class="view" hidden></div>
+  <div id="view-tools" class="view" hidden></div>
+
+  <footer class="foot">
+    <span>Stored on this device only.</span>
+    <span class="foot-dot">·</span>
+    <span id="foot-counts"></span>
+  </footer>
+</main>
+
+<div id="tooltip" class="tt" hidden></div>
+<div id="modal-root"></div>
+<input type="file" id="file-input" accept="application/json" hidden />
+
+<script type="module" src="./assets/app.js"></script>
+</body>
+</html>
