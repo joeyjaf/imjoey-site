@@ -388,7 +388,7 @@ export const DEFAULT_STATE = {
   unhidden: {},        // txnId → true  (override an auto-hide)
   appliedAgainst: {},  // incomeTxnId → expenseTxnId
   hideBefore: '2026-09-22',
-  manualBalances: {},   // balances Era cannot see; never clobbered by a pull
+  anchors: {},          // accountId → {amount,date}; balance carries forward from here
   pieMode: 'month',
   range: 'since',
 };

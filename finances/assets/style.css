@@ -552,3 +552,5 @@ tr.is-out td .cat-pill { opacity: .7; }
 }
 .dk-click:hover { background: rgba(255,255,255,0.05); }
 .dk-click:hover .dk-n { color: var(--fg); }
+
+.bal-move { display: block; font-size: 11px; color: var(--muted-2); margin-top: 3px; font-variant-numeric: tabular-nums; }

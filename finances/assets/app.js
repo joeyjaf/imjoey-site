@@ -116,14 +116,23 @@ function derive() {
   // window can't produce a monthly figure
   const vs = D.variableSpend(counting, active, VAULT.asOf);
   const variableMo = S.variableOverride != null ? Number(S.variableOverride) : vs.perMonth;
-  // Era cannot see what is preloaded on the secured card, so that figure is kept
-  // by hand and must survive every pull.
-  const acctBal = (acc) => acc.balanceSource === 'manual'
-    ? Number((S.manualBalances || {})[acc.id] ?? acc.balance)
-    : acc.balance;
-  const accounts = VAULT.accounts
-    .map(acc => ({ ...acc, shownBalance: acctBal(acc) }))
-    .filter(acc => acc.shownBalance !== 0 || acc.spendable === false);
+  // Era cannot see what is preloaded on the secured card — it reports cumulative
+  // spend instead. So that account is anchored to a known amount on a known date
+  // and carried forward by its own rows: a charge reduces it, "To Varo Believe"
+  // increases it, "From Varo Believe" decreases it. Verified against the data:
+  // every transfer mirrors exactly on the debit side.
+  const anchorFor = (acc) => (S.anchors || {})[acc.id] || acc.anchor;
+  const movementSince = (acc, since) => all
+    .filter(t => t.account === acc.id && t.date > since)
+    .reduce((s, t) => s + t.amount, 0);
+
+  const accounts = VAULT.accounts.map(acc => {
+    if (acc.balanceSource !== 'derived') return { ...acc, shownBalance: acc.balance };
+    const an = anchorFor(acc);
+    if (!an) return { ...acc, shownBalance: acc.balance };
+    const moved = movementSince(acc, an.date);
+    return { ...acc, anchor: an, moved, shownBalance: Number(an.amount) + moved };
+  }).filter(acc => acc.shownBalance !== 0 || acc.spendable === false);
   const spendable = accounts.filter(a => a.spendable !== false).reduce((s, a) => s + a.shownBalance, 0);
 
   const pts = D.project({
@@ -300,9 +309,11 @@ function viewOverview(x) {
       '<div class="hero">' + esc(money(x.spendable, { cents: true })) + '</div>' +
       '<div class="hero-sub">' + chip(health.k, health.t) + '</div></div>' +
       '<div class="hero-split">' + x.accounts.map(a =>
-        '<div>' + esc(a.name) + (a.balanceSource === 'manual' ? ' <span class="by-hand">kept by hand</span>' : '') +
-        (a.balanceSource === 'manual'
-          ? '<button class="bal-edit" data-bal="' + esc(a.id) + '" title="Update what is preloaded on this card">' + esc(money(a.shownBalance, { cents: true })) + '</button>'
+        '<div>' + esc(a.name) +
+        (a.balanceSource === 'derived'
+          ? ' <span class="by-hand" title="Anchored ' + esc(d.short(a.anchor.date)) + ', carried forward by its own transactions">tracked</span>' +
+            '<button class="bal-edit" data-bal="' + esc(a.id) + '" title="Re-anchor if this has drifted from the app">' + esc(money(a.shownBalance, { cents: true })) + '</button>' +
+            (a.moved ? '<span class="bal-move">' + esc(money(a.moved, { cents: true, sign: true })) + ' since ' + esc(d.short(a.anchor.date)) + '</span>' : '')
           : '<b>' + esc(money(a.shownBalance, { cents: true })) + '</b>')
         + '</div>').join('') +
       '</div></div></div>' +
@@ -1172,16 +1183,35 @@ function editRecurring(r, x) {
   });
 }
 
+/* Re-anchor. Normally never needed — the balance carries itself forward from the
+   account's own rows. Use it only if the figure has drifted from what Varo shows,
+   which would mean a charge landed that the pull hasn't seen. */
 function editBalance(id, x) {
   const acc = x.accounts.find(a => a.id === id);
-  modal('Preloaded on ' + acc.name,
-    'Era does not report this. It reports ' + esc(money(acc.eraBalance ?? 0, { cents: true })) +
-    ', which is everything ever spent on the card — already counted in the transactions below, so it is not used here.',
-    '<div class="field"><label>Available to spend</label>' +
-      '<input class="inp" id="b-a" type="number" step="0.01" value="' +
-      esc((S.manualBalances || {})[id] ?? acc.balance) + '"></div>' +
-    '<p class="card-s" style="margin:12px 0 0">Kept across refreshes — a pull will not overwrite it.</p>',
-    (m) => { S.manualBalances = { ...(S.manualBalances || {}), [id]: +$('#b-a', m).value || 0 }; });
+  const an = acc.anchor || { amount: acc.balance, date: VAULT.asOf };
+  const rows = x.all.filter(t => t.account === id && t.date > an.date);
+  modal('Re-anchor ' + acc.name,
+    'This balance is worked out, not typed: ' + esc(money(Number(an.amount), { cents: true })) +
+    ' on ' + esc(d.long(an.date)) + ', then ' + rows.length + ' transaction' + (rows.length === 1 ? '' : 's') +
+    ' since — charges down, transfers in up, transfers out down.' +
+    '<br><span style="color:var(--muted-2)">Only re-anchor if it has drifted from what Varo shows.</span>',
+    '<div class="row">' +
+      '<div class="field"><label>Balance Varo shows</label>' +
+        '<input class="inp" id="b-a" type="number" step="0.01" value="' + esc(acc.shownBalance.toFixed(2)) + '"></div>' +
+      '<div class="field"><label>As of</label>' +
+        '<input class="inp" id="b-d" type="date" value="' + esc(VAULT.asOf) + '"></div>' +
+    '</div>' +
+    (rows.length ? '<details class="tv" style="margin-top:14px"><summary>' + rows.length + ' since the anchor</summary>' +
+      '<div style="max-height:200px;overflow-y:auto">' + rows.map(t =>
+        '<div class="row" style="justify-content:space-between;padding:4px 0;font-size:12.5px">' +
+        '<span style="color:var(--text-secondary)">' + esc(d.short(t.date)) + ' ' + esc(t.merchant) + '</span>' +
+        '<span class="num">' + esc(money(t.amount, { cents: true, sign: true })) + '</span></div>').join('') +
+      '</div></details>' : '') +
+    '<p class="card-s" style="margin:14px 0 0">Era reports ' + esc(money(acc.eraBalance ?? 0, { cents: true })) +
+      ' for this card — that is everything ever spent on it, already counted in the transactions, so it is not used.</p>',
+    (m) => {
+      S.anchors = { ...(S.anchors || {}), [id]: { amount: +$('#b-a', m).value || 0, date: $('#b-d', m).value || VAULT.asOf } };
+    }, 'Re-anchor');
 }
 
 function editVariable(x) {
