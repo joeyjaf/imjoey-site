@@ -2,7 +2,7 @@
    mock.js — DEMO data only. Deleted the moment the Era pull lands.
    Shape here IS the contract the Era import must produce.
    ═══════════════════════════════════════════════════════════ */
-import { d } from './data.js';
+import { d } from './data.js?v=67b4cd6369';
 
 const HIST_START = '2026-06-01';   // detector needs history; display still floors at Sept 15
 const TODAY = '2026-09-22';

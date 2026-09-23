@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    app.js — state, views, wiring
    ═══════════════════════════════════════════════════════════ */
-import * as D from './data.js';
-import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js';
-import * as G from './gambling.js';
+import * as D from './data.js?v=67b4cd6369';
+import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=67b4cd6369';
+import * as G from './gambling.js?v=67b4cd6369';
 
 const { d, money, compact, catColor, catName, slotColor, perMonth, cadenceLabel } = D;
 const $ = (s, r = document) => r.querySelector(s);
@@ -31,7 +31,7 @@ async function tryUnlock(code) {
   // No encrypted vault present → design/demo mode. Loaded on demand so the
   // fabricated data never ships alongside a real vault.
   if (code === PASSCODE) {
-    const { buildMockVault } = await import('./mock.js');
+    const { buildMockVault } = await import('./mock.js?v=67b4cd6369');
     return buildMockVault();
   }
   return null;
