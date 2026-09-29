@@ -219,18 +219,28 @@ export function ruleMatches(r, txn) {
 export const sameRuleTarget = (a, b) =>
   a.field === b.field && normMerchant(a.value) === normMerchant(b.value);
 
-export function applyRules(txn, rules, manual) {
+/* A rule only fires on the side its category belongs to. Categorising the Venmo
+   CHARGES as Food wrote a merchant rule that also swallowed Venmo DEPOSITS, so a
+   friend paying Joey back never reached review. Deriving the side from the category
+   also fixes rules saved before this existed. */
+function ruleSideOk(r, txn, cats) {
+  const side = cats && (cats.find(c => c.id === r.category) || {}).side;
+  if (side === 'out') return txn.amount < 0;
+  if (side === 'in') return txn.amount > 0;
+  return true;
+}
+export function applyRules(txn, rules, manual, cats) {
   if (manual[txn.id]) return { category: manual[txn.id], catSource: 'manual' };
   for (let i = 0; i < rules.length; i++) {
-    if (ruleMatches(rules[i], txn)) return { category: rules[i].category, catSource: 'rule', ruleIdx: i };
+    if (ruleSideOk(rules[i], txn, cats) && ruleMatches(rules[i], txn)) return { category: rules[i].category, catSource: 'rule', ruleIdx: i };
   }
   if (txn.category && txn.category !== 'other') {
     return { category: txn.category, catSource: 'auto', catConfidence: txn.catConfidence || 'medium' };
   }
   return { category: 'other', catSource: 'none', catConfidence: 'none' };
 }
-export const categorise = (txns, rules, manual) =>
-  txns.map(t => ({ ...t, ...applyRules(t, rules, manual) }));
+export const categorise = (txns, rules, manual, cats) =>
+  txns.map(t => ({ ...t, ...applyRules(t, rules, manual, cats) }));
 
 /* Needs a human look: it still counts and nothing set its category by hand or by
    rule with any confidence. Money IN qualifies too — an odd deposit is either real

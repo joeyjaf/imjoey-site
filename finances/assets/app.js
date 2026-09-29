@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    app.js — state, views, wiring
    ═══════════════════════════════════════════════════════════ */
-import * as D from './data.js?v=2d417bd2c9';
-import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=2d417bd2c9';
-import * as G from './gambling.js?v=2d417bd2c9';
+import * as D from './data.js?v=049dc6204a';
+import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=049dc6204a';
+import * as G from './gambling.js?v=049dc6204a';
 
 const { d, money, compact, catColor, catName, slotColor, perMonth, cadenceLabel } = D;
 const $ = (s, r = document) => r.querySelector(s);
@@ -31,7 +31,7 @@ async function tryUnlock(code) {
   // No encrypted vault present → design/demo mode. Loaded on demand so the
   // fabricated data never ships alongside a real vault.
   if (code === PASSCODE) {
-    const { buildMockVault } = await import('./mock.js?v=2d417bd2c9');
+    const { buildMockVault } = await import('./mock.js?v=049dc6204a');
     return buildMockVault();
   }
   return null;
@@ -91,7 +91,7 @@ function derive() {
   // 3. categorise.  Order matters: netting must happen before anything sums.
   const flagged = G.annotate(VAULT.transactions, S.hideBefore || G.HIDE_BEFORE).txns;
   const resolved = D.resolve(flagged, S);
-  const all = D.categorise(resolved, S.rules, S.manual);
+  const all = D.categorise(resolved, S.rules, S.manual, S.categories);
 
   const counting = all.filter(t => t.counts);
   const shown = all.filter(t => t.date >= floor);
@@ -351,10 +351,15 @@ function viewOverview(x) {
         (x.reviewQ.length ? '<span class="rev-count">' + x.reviewQ.length + '</span>' : '') + '</h2>' +
         '<p class="card-s">Money in and out that nothing has confidently sorted. Setting a category also writes a rule for that merchant. A deposit can instead be applied against the expense it paid back.</p></div></div>' +
       (x.reviewQ.length ? (() => {
+        /* Every deposit gets its own row so each can be applied against the charge it
+           paid back. Grouping by merchant lumped Venmo money in with Venmo payments
+           out, and the deposit vanished into a "charges" group below the cut. */
         const byM = {};
-        for (const t of x.reviewQ) { const k = D.normMerchant(t.merchant); (byM[k] = byM[k] || []).push(t); }
-        const inFirst = (e) => e[1].every(t => t.amount > 0) ? 0 : 1;
-        return Object.entries(byM).sort((a, b) => inFirst(a) - inFirst(b) || b[1].length - a[1].length).slice(0, 7).map(([k, list]) => {
+        for (const t of x.reviewQ) { const k = revKey(t); (byM[k] = byM[k] || []).push(t); }
+        const ins = Object.entries(byM).filter(e => e[1][0].amount > 0);
+        const outs = Object.entries(byM).filter(e => e[1][0].amount <= 0).sort((a, b) => b[1].length - a[1].length);
+        const moreOut = Math.max(0, outs.length - 7);
+        return [...ins, ...outs.slice(0, 7)].map(([k, list]) => {
           const t = list[0];
           const isIn = list.every(y => y.amount > 0);
           const sum = list.reduce((s, y) => s + Math.abs(y.netAmount ?? y.amount), 0);
@@ -374,7 +379,7 @@ function viewOverview(x) {
               '<button class="icon-btn" data-rev-rec="' + esc(t.id) + '" title="This repeats — make it recurring">↻</button>' +
               '<button class="icon-btn" data-rev-skip="' + esc(k) + '" title="' + (isIn ? 'Not income — leave it out' : 'Not spending — leave it out') + '">✕</button>' +
             '</div></div>';
-        }).join('') + (Object.keys(byM).length > 7 ? '<div class="rev-s" style="padding-top:10px">+ ' + (Object.keys(byM).length - 7) + ' more merchants</div>' : '');
+        }).join('') + (moreOut ? '<div class="rev-s" style="padding-top:10px">+ ' + moreOut + ' more merchants</div>' : '');
       })() : '<div class="empty">Everything is categorised.</div>') +
     '</div>' +
 
@@ -447,15 +452,10 @@ function viewOverview(x) {
       const row = sel.closest('.rev-row');
       const dir = row && row.textContent.includes('money in') ? 'in' : 'out';
       sel.value = '';
-      addCategory(x, dir, (newId) => {
-        for (const t of x.reviewQ) if (D.normMerchant(t.merchant) === key) S.manual[t.id] = newId;
-        addRule({ field: 'merchant', op: 'contains', value: key, category: newId }, true, x);
-        D.saveState(S); render();
-      });
+      addCategory(x, dir, (newId) => { setRevCategory(key, newId, x); D.saveState(S); render(); });
       return;
     }
-    for (const t of x.reviewQ) if (D.normMerchant(t.merchant) === key) S.manual[t.id] = cat;
-    addRule({ field: 'merchant', op: 'contains', value: key, category: cat }, true, x);
+    setRevCategory(key, cat, x);
     D.saveState(S); render();
   });
   $$('[data-rev-apply]').forEach(b => b.onclick = () => applyAgainst(b.dataset.revApply, x));
@@ -467,9 +467,19 @@ function viewOverview(x) {
   });
   $$('[data-rev-skip]').forEach(b => b.onclick = () => {
     const key = b.dataset.revSkip;
-    for (const t of x.reviewQ) if (D.normMerchant(t.merchant) === key) S.excluded[t.id] = true;
+    for (const t of x.reviewQ) if (revKey(t) === key) S.excluded[t.id] = true;
     D.saveState(S); render();
   });
+}
+
+/* Review-queue keys: a deposit is keyed by its own id (one decision per deposit, no
+   rule written, since the next Venmo in may be a different friend or real income).
+   Charges group by merchant and setting one writes a merchant rule. */
+const revKey = (t) => t.amount > 0 ? 'in:' + t.id : D.normMerchant(t.merchant);
+function setRevCategory(key, cat, x) {
+  if (key.startsWith('in:')) { S.manual[key.slice(3)] = cat; return; }
+  for (const t of x.reviewQ) if (revKey(t) === key) S.manual[t.id] = cat;
+  addRule({ field: 'merchant', op: 'contains', value: key, category: cat }, true, x);
 }
 
 /* ── RECURRING ── */
