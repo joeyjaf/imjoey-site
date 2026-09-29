@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    app.js — state, views, wiring
    ═══════════════════════════════════════════════════════════ */
-import * as D from './data.js?v=6c6b7ec345';
-import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=6c6b7ec345';
-import * as G from './gambling.js?v=6c6b7ec345';
+import * as D from './data.js?v=97369f737d';
+import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=97369f737d';
+import * as G from './gambling.js?v=97369f737d';
 
 const { d, money, compact, catColor, catName, slotColor, perMonth, cadenceLabel } = D;
 const $ = (s, r = document) => r.querySelector(s);
@@ -14,8 +14,10 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<'
 
 let VAULT = null, S = null, VIEW = 'overview';
 
-/* ═══════════════ GATE ═══════════════ */
-const PASSCODE = '124512';
+/* ═══════════════ GATE ═══════════════
+   No passcode lives in this file: it's public. The real check is whether the
+   code decrypts vault.enc.json. Demo data only loads when no vault is published. */
+const REMEMBER = 'ledger.k';   // localStorage: this device stays unlocked until Lock
 
 async function tryUnlock(code) {
   // Encrypted vault, if one was published. Wrong code → decryption genuinely fails.
@@ -30,8 +32,8 @@ async function tryUnlock(code) {
   } catch {}
   // No encrypted vault present → design/demo mode. Loaded on demand so the
   // fabricated data never ships alongside a real vault.
-  if (code === PASSCODE) {
-    const { buildMockVault } = await import('./mock.js?v=6c6b7ec345');
+  if (code) {
+    const { buildMockVault } = await import('./mock.js?v=97369f737d');
     return buildMockVault();
   }
   return null;
@@ -62,9 +64,28 @@ $('#gate-form').addEventListener('submit', async (e) => {
     inp.value = ''; inp.focus();
     return;
   }
-  sessionStorage.setItem('ledger.ok', '1');
-  sessionStorage.setItem('ledger.k', inp.value.trim());
+  localStorage.setItem(REMEMBER, inp.value.trim());
+  inp.blur();
   boot(v);
+});
+
+/* Remembered device: unlock straight away, no keyboard. If the code stopped working
+   (passcode changed), forget it and show the gate as normal. */
+(async () => {
+  const saved = localStorage.getItem(REMEMBER) || sessionStorage.getItem('ledger.k');
+  if (!saved) return;
+  $('#gate-sub-text') && ($('#gate-sub-text').textContent = 'Unlocking…');
+  const v = await tryUnlock(saved);
+  if (v) { localStorage.setItem(REMEMBER, saved); boot(v); }
+  else { localStorage.removeItem(REMEMBER); $('#gate-sub-text') && ($('#gate-sub-text').textContent = 'Enter passcode'); }
+})();
+
+/* iOS leaves the layout viewport shifted after the keyboard closes, so every tap
+   lands a few pixels above where it looks. Snapping the scroll position after any
+   field loses focus re-syncs the hit-testing with what's drawn. */
+document.addEventListener('focusout', (e) => {
+  if (!/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  setTimeout(() => window.scrollTo(window.scrollX, window.scrollY), 60);
 });
 
 function boot(vault) {
@@ -80,7 +101,10 @@ function boot(vault) {
   render();
 }
 
-$('#btn-lock').addEventListener('click', () => { sessionStorage.removeItem('ledger.ok'); location.reload(); });
+$('#btn-lock').addEventListener('click', () => {
+  localStorage.removeItem(REMEMBER); sessionStorage.removeItem('ledger.k'); sessionStorage.removeItem('ledger.ok');
+  location.reload();
+});
 
 /* ═══════════════ DERIVED ═══════════════ */
 function derive() {
@@ -1324,7 +1348,7 @@ $('#btn-refresh').onclick = async () => {
   try {
     const res = await fetch('./vault.enc.json?t=' + Date.now(), { cache: 'no-store' });
     if (res.ok) {
-      const fresh = await decryptVault(await res.json(), sessionStorage.getItem('ledger.k') || '');
+      const fresh = await decryptVault(await res.json(), localStorage.getItem(REMEMBER) || sessionStorage.getItem('ledger.k') || '');
       if (fresh && fresh.pulledAt !== VAULT.pulledAt) {
         VAULT = fresh; buildChrome(); render();
         b.textContent = 'Updated'; setTimeout(() => { b.disabled = false; updateStamp(); }, 1400);
