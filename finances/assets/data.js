@@ -205,14 +205,24 @@ export function detectRecurring(txns, asOf = TODAY) {
 /* ═══════════════ RULES ═══════════════ */
 /* Where a category came from decides whether it needs review.
    manual > rule > whatever the bank guessed > nothing. */
+/* Merchant rules compare normalised text on both sides: the UI writes rule values
+   through normMerchant ("APPLE COM"), which a raw "Apple.com" never contains. */
+export function ruleMatches(r, txn) {
+  if (!r.value) return false;
+  if (r.from && txn.date < r.from) return false;   // "from now on" rules skip the past
+  const norm = r.field === 'description' ? (s) => String(s || '').toLowerCase() : (s) => normMerchant(s).toLowerCase();
+  const hay = norm(r.field === 'description' ? txn.description : txn.merchant);
+  const v = norm(r.value);
+  if (!v) return false;
+  return r.op === 'equals' ? hay === v : r.op === 'startsWith' ? hay.startsWith(v) : hay.includes(v);
+}
+export const sameRuleTarget = (a, b) =>
+  a.field === b.field && normMerchant(a.value) === normMerchant(b.value);
+
 export function applyRules(txn, rules, manual) {
   if (manual[txn.id]) return { category: manual[txn.id], catSource: 'manual' };
-  for (const r of rules) {
-    if (!r.value) continue;
-    const hay = String((r.field === 'description' ? txn.description : txn.merchant) || '').toLowerCase();
-    const v = r.value.toLowerCase();
-    const hit = r.op === 'equals' ? hay === v : r.op === 'startsWith' ? hay.startsWith(v) : hay.includes(v);
-    if (hit) return { category: r.category, catSource: 'rule' };
+  for (let i = 0; i < rules.length; i++) {
+    if (ruleMatches(rules[i], txn)) return { category: rules[i].category, catSource: 'rule', ruleIdx: i };
   }
   if (txn.category && txn.category !== 'other') {
     return { category: txn.category, catSource: 'auto', catConfidence: txn.catConfidence || 'medium' };
@@ -400,6 +410,17 @@ export function loadState() {
   } catch { return structuredClone(DEFAULT_STATE); }
 }
 export function saveState(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} }
+
+/* Rules used to be appended, so with first-match-wins the OLDEST rule for a
+   merchant beat every later correction. v2 keeps newest first; flip the old list
+   once and drop the superseded duplicates. */
+export function migrateRules(s) {
+  if (s.rulesV >= 2) return false;
+  const out = [];
+  for (const r of [...s.rules].reverse()) if (!out.some(o => sameRuleTarget(o, r))) out.push(r);
+  s.rules = out; s.rulesV = 2;
+  return true;
+}
 
 /* merge detected recurring with the user's edits + hand-added items */
 /* Anything under this is listed for review but kept OUT of the forecast until

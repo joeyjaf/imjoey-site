@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    app.js — state, views, wiring
    ═══════════════════════════════════════════════════════════ */
-import * as D from './data.js?v=67b4cd6369';
-import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=67b4cd6369';
-import * as G from './gambling.js?v=67b4cd6369';
+import * as D from './data.js?v=2d417bd2c9';
+import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=2d417bd2c9';
+import * as G from './gambling.js?v=2d417bd2c9';
 
 const { d, money, compact, catColor, catName, slotColor, perMonth, cadenceLabel } = D;
 const $ = (s, r = document) => r.querySelector(s);
@@ -31,7 +31,7 @@ async function tryUnlock(code) {
   // No encrypted vault present → design/demo mode. Loaded on demand so the
   // fabricated data never ships alongside a real vault.
   if (code === PASSCODE) {
-    const { buildMockVault } = await import('./mock.js?v=67b4cd6369');
+    const { buildMockVault } = await import('./mock.js?v=2d417bd2c9');
     return buildMockVault();
   }
   return null;
@@ -70,6 +70,7 @@ $('#gate-form').addEventListener('submit', async (e) => {
 function boot(vault) {
   VAULT = vault;
   S = D.loadState();
+  if (D.migrateRules(S)) D.saveState(S);
   $('#gate').hidden = true;
   $('#app').hidden = false;
   $('#demo-banner').hidden = !vault.demo;
@@ -448,13 +449,13 @@ function viewOverview(x) {
       sel.value = '';
       addCategory(x, dir, (newId) => {
         for (const t of x.reviewQ) if (D.normMerchant(t.merchant) === key) S.manual[t.id] = newId;
-        S.rules.push({ field: 'merchant', op: 'contains', value: key, category: newId });
+        addRule({ field: 'merchant', op: 'contains', value: key, category: newId }, true, x);
         D.saveState(S); render();
       });
       return;
     }
     for (const t of x.reviewQ) if (D.normMerchant(t.merchant) === key) S.manual[t.id] = cat;
-    S.rules.push({ field: 'merchant', op: 'contains', value: key, category: cat });
+    addRule({ field: 'merchant', op: 'contains', value: key, category: cat }, true, x);
     D.saveState(S); render();
   });
   $$('[data-rev-apply]').forEach(b => b.onclick = () => applyAgainst(b.dataset.revApply, x));
@@ -590,18 +591,27 @@ function viewCategories(x) {
 
       <div class="card">
         <div class="card-h"><div><h2 class="card-t">Rules</h2>
-          <p class="card-s">First match wins. A category you set by hand on a single transaction always beats a rule.</p></div>
+          <p class="card-s">Newest rule sits on top and the first match wins. A category set by hand beats a rule until you apply that rule to the past.</p></div>
           <div class="card-act"><button class="btn btn-sm" id="add-rule">New rule</button></div></div>
-        ${S.rules.length ? S.rules.map((r, i) => `
+        ${S.rules.length ? S.rules.map((r, i) => {
+          const decides = x.all.filter(t => t.catSource === 'rule' && t.ruleIdx === i).length;
+          // matches this rule doesn't reach: hand-set, or dated before a future-only rule.
+          // Ones a newer rule above it decides are that rule's business, not missed.
+          const missed = pastMatches(r, x).filter(t => t.category !== r.category && !(t.catSource === 'rule' && t.ruleIdx < i)).length;
+          return `
           <div class="row" style="justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.045)">
             <div style="font-size:12.5px;min-width:0">
               <span style="color:var(--muted)">${esc(r.field)} ${esc(r.op)}</span>
               <span style="font-family:var(--mono);color:var(--fg)">"${esc(r.value)}"</span>
               <span style="color:var(--muted)">→</span>
               <span class="cat-pill" style="cursor:default"><span class="cat-dot" style="background:${catColor(x.cats, r.category)}"></span>${esc(catName(x.cats, r.category))}</span>
+              <div style="color:var(--muted);font-size:11.5px;margin-top:3px">${r.from ? 'From ' + esc(d.short(r.from)) + ' on' : 'Past and future'} · sorts ${decides} ${decides === 1 ? 'transaction' : 'transactions'}${missed ? ` · ${missed} past ${missed === 1 ? 'one' : 'ones'} not following it` : ''}</div>
             </div>
-            <button class="btn-x" data-rule="${i}">Remove</button>
-          </div>`).join('') : '<div class="empty">No rules yet. Add one, or open a transaction and turn it into a rule.</div>'}
+            <div class="row" style="gap:6px;flex-shrink:0">
+              ${missed ? `<button class="btn btn-sm" data-rule-past="${i}">Apply to past</button>` : ''}
+              <button class="btn-x" data-rule="${i}">Remove</button>
+            </div>
+          </div>`; }).join('') : '<div class="empty">No rules yet. Add one, or open a transaction and turn it into a rule.</div>'}
       </div>
     </div>
 
@@ -617,6 +627,7 @@ function viewCategories(x) {
   $('#add-rule').onclick = () => editRule(x);
   $('#add-cat').onclick = () => addCategory(x, 'out');
   $$('[data-rule]').forEach(b => b.onclick = () => { S.rules.splice(+b.dataset.rule, 1); D.saveState(S); render(); });
+  $$('[data-rule-past]').forEach(b => b.onclick = () => { applyRuleToPast(+b.dataset.rulePast, x); D.saveState(S); render(); });
 }
 
 /* ── WINDFALLS ── */
@@ -1046,33 +1057,72 @@ function modal(title, sub, bodyHTML, onSave, saveLabel = 'Save') {
 }
 const catOptions = (cats, sel, dir) => (dir ? D.catsFor(cats, dir) : cats).map(c => `<option value="${esc(c.id)}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
 
+/* ── RULES ──
+   Every rule the UI writes goes through addRule. Newest goes on top so it beats
+   older rules, and it replaces any earlier rule aimed at the same text. Applying
+   to the past also releases hand-set categories on matching transactions, since a
+   hand-set category otherwise beats every rule forever. Future-only rules carry a
+   `from` date and leave everything before it alone. */
+const todayISO = () => new Date().toLocaleDateString('en-CA');
+const pastMatches = (rule, x) => x.all.filter(t => D.ruleMatches({ ...rule, from: null }, t));
+
+function addRule(rule, past, x) {
+  S.rules = S.rules.filter(r => !D.sameRuleTarget(r, rule));
+  if (past) for (const t of pastMatches(rule, x)) delete S.manual[t.id];
+  else rule.from = todayISO();
+  S.rules.unshift(rule);
+}
+function applyRuleToPast(i, x) {
+  const r = S.rules[i]; if (!r) return;
+  delete r.from;
+  for (const t of pastMatches(r, x)) if (!(t.catSource === 'rule' && t.ruleIdx < i)) delete S.manual[t.id];
+}
+const pastLabel = (n) => `Apply to past transactions too <span style="color:var(--fg)">(${n} ${n === 1 ? 'match' : 'matches'} now)</span>`;
+
 function assignCategory(txId, x) {
   const t = x.all.find(y => y.id === txId);
-  modal('Category', `${esc(t.merchant)} · ${esc(money(t.amount, { cents: true, sign: true }))} · ${esc(d.long(t.date))}`, `
+  const key = D.normMerchant(t.merchant);
+  const n = pastMatches({ field: 'merchant', op: 'contains', value: key }, x).length;
+  const root = modal('Category', `${esc(t.merchant)} · ${esc(money(t.amount, { cents: true, sign: true }))} · ${esc(d.long(t.date))}`, `
     <div class="field"><label>Category</label><select class="inp" id="m-cat">${catOptions(x.cats, t.category, t.amount > 0 ? 'in' : 'out')}</select></div>
     <label class="row" style="margin-top:14px;font-size:13px;color:var(--muted);cursor:pointer">
-      <input type="checkbox" id="m-rule"> Also make a rule: every "<span style="color:var(--fg)">${esc(D.normMerchant(t.merchant))}</span>" goes here
+      <input type="checkbox" id="m-rule"> Also make a rule: every "<span style="color:var(--fg)">${esc(key)}</span>" goes here
+    </label>
+    <label class="row" id="m-past-row" style="margin-top:8px;margin-left:24px;font-size:13px;color:var(--muted);cursor:pointer;opacity:.45">
+      <input type="checkbox" id="m-past" checked disabled> ${pastLabel(n)}
     </label>`, (m) => {
     const cat = $('#m-cat', m).value;
     S.manual[txId] = cat;
     if ($('#m-rule', m).checked) {
-      S.rules.push({ field: 'merchant', op: 'contains', value: D.normMerchant(t.merchant), category: cat });
+      addRule({ field: 'merchant', op: 'contains', value: key, category: cat }, $('#m-past', m).checked, x);
     }
   });
+  $('#m-rule', root).onchange = (e) => {
+    $('#m-past', root).disabled = !e.target.checked;
+    $('#m-past-row', root).style.opacity = e.target.checked ? '1' : '.45';
+  };
 }
 
 function editRule(x) {
-  modal('New rule', 'Applied top-down; first match wins.', `
+  const root = modal('New rule', 'New rules go on top and win over older ones.', `
     <div class="row">
       <div class="field"><label>Field</label><select class="inp" id="r-f"><option value="merchant">Merchant</option><option value="description">Description</option></select></div>
       <div class="field"><label>Test</label><select class="inp" id="r-o"><option value="contains">contains</option><option value="startsWith">starts with</option><option value="equals">equals</option></select></div>
     </div>
     <div class="field" style="margin-top:12px"><label>Text</label><input class="inp" id="r-v" placeholder="e.g. SAFEWAY"></div>
-    <div class="field" style="margin-top:12px"><label>Category</label><select class="inp" id="r-c">${catOptions(x.cats)}</select></div>`,
+    <div class="field" style="margin-top:12px"><label>Category</label><select class="inp" id="r-c">${catOptions(x.cats)}</select></div>
+    <label class="row" style="margin-top:14px;font-size:13px;color:var(--muted);cursor:pointer">
+      <input type="checkbox" id="r-past" checked> <span id="r-past-l">${pastLabel(0)}</span>
+    </label>`,
     (m) => {
       const v = $('#r-v', m).value.trim(); if (!v) return false;
-      S.rules.push({ field: $('#r-f', m).value, op: $('#r-o', m).value, value: v, category: $('#r-c', m).value });
+      addRule({ field: $('#r-f', m).value, op: $('#r-o', m).value, value: v, category: $('#r-c', m).value }, $('#r-past', m).checked, x);
     }, 'Add rule');
+  const recount = () => {
+    const r = { field: $('#r-f', root).value, op: $('#r-o', root).value, value: $('#r-v', root).value.trim() };
+    $('#r-past-l', root).innerHTML = pastLabel(r.value ? pastMatches(r, x).length : 0);
+  };
+  ['#r-f', '#r-o', '#r-v'].forEach(s => $(s, root).addEventListener('input', recount));
 }
 
 function addCategory(x, side = 'out', after = null) {
