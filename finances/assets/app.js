@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════
    app.js — state, views, wiring
    ═══════════════════════════════════════════════════════════ */
-import * as D from './data.js?v=049dc6204a';
-import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=049dc6204a';
-import * as G from './gambling.js?v=049dc6204a';
+import * as D from './data.js?v=6c6b7ec345';
+import { projectionChart, categoryBars, billCalendar, donutChart, monthCalendar, sparkline, showTip, hideTip } from './charts.js?v=6c6b7ec345';
+import * as G from './gambling.js?v=6c6b7ec345';
 
 const { d, money, compact, catColor, catName, slotColor, perMonth, cadenceLabel } = D;
 const $ = (s, r = document) => r.querySelector(s);
@@ -31,7 +31,7 @@ async function tryUnlock(code) {
   // No encrypted vault present → design/demo mode. Loaded on demand so the
   // fabricated data never ships alongside a real vault.
   if (code === PASSCODE) {
-    const { buildMockVault } = await import('./mock.js?v=049dc6204a');
+    const { buildMockVault } = await import('./mock.js?v=6c6b7ec345');
     return buildMockVault();
   }
   return null;
@@ -180,8 +180,7 @@ function derive() {
       .sort((a, b) => b.value - a.value);
   })();
 
-  const payrollIds = new Set(active.filter(r => r.direction === 'in').flatMap(r => r.txnIds || []));
-  const reviewQ = shown.filter(t => D.needsReview(t) && !payrollIds.has(t.id))
+  const reviewQ = shown.filter(t => D.needsApproval(t, S))
     .sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
 
   // How much can this forecast actually be trusted? A monthly bill needs two
@@ -347,40 +346,29 @@ function viewOverview(x) {
   '<div class="grid g-2">' +
     // ── review queue (replaces safe-to-spend) ──
     '<div class="card">' +
-      '<div class="card-h"><div><h2 class="card-t">Needs a category ' +
+      '<div class="card-h"><div><h2 class="card-t">To approve ' +
         (x.reviewQ.length ? '<span class="rev-count">' + x.reviewQ.length + '</span>' : '') + '</h2>' +
-        '<p class="card-s">Money in and out that nothing has confidently sorted. Setting a category also writes a rule for that merchant. A deposit can instead be applied against the expense it paid back.</p></div></div>' +
-      (x.reviewQ.length ? (() => {
-        /* Every deposit gets its own row so each can be applied against the charge it
-           paid back. Grouping by merchant lumped Venmo money in with Venmo payments
-           out, and the deposit vanished into a "charges" group below the cut. */
-        const byM = {};
-        for (const t of x.reviewQ) { const k = revKey(t); (byM[k] = byM[k] || []).push(t); }
-        const ins = Object.entries(byM).filter(e => e[1][0].amount > 0);
-        const outs = Object.entries(byM).filter(e => e[1][0].amount <= 0).sort((a, b) => b[1].length - a[1].length);
-        const moreOut = Math.max(0, outs.length - 7);
-        return [...ins, ...outs.slice(0, 7)].map(([k, list]) => {
-          const t = list[0];
-          const isIn = list.every(y => y.amount > 0);
-          const sum = list.reduce((s, y) => s + Math.abs(y.netAmount ?? y.amount), 0);
-          const noun = isIn ? 'deposit' : 'charge';
-          return '<div class="rev-row" data-rev="' + esc(k) + '">' +
+        '<p class="card-s">Every new transaction lands here with a suggested category. ✓ keeps the suggestion, picking another category approves with that one (and a charge teaches the merchant for next time). A deposit can be applied against what it paid back; ✕ leaves it out of every total.</p></div>' +
+        (x.reviewQ.length > 1 ? '<div class="card-act"><button class="ghost-btn" id="rev-all">Approve all ' + x.reviewQ.length + '</button></div>' : '') +
+      '</div>' +
+      (x.reviewQ.length ? x.reviewQ.slice(0, revLimit).map(t => {
+          const isIn = t.amount > 0;
+          const acct = ((VAULT.accounts.find(a => a.id === t.account) || {}).name || '').replace(/^Varo /, '');
+          return '<div class="rev-row">' +
             '<div class="rev-l"><div class="rev-m">' + esc(t.merchant) +
-              (isIn ? ' <span class="tag tag-applied">money in</span>' : '') + '</div>' +
-              '<div class="rev-s">' + list.length + ' ' + noun + (list.length === 1 ? '' : 's') + ' · ' +
-              (isIn ? '+' : '') + esc(money(sum)) + ' · latest ' + esc(d.short(t.date)) +
-              (isIn ? ' · income, or paying you back?' : '') + '</div></div>' +
+              (isIn ? ' <span class="tag tag-applied">money in</span>' : '') +
+              (t.pending ? ' <span class="tag tag-hidden">pending</span>' : '') + '</div>' +
+              '<div class="rev-s">' + esc(d.short(t.date)) + (acct ? ' · ' + esc(acct) : '') + ' · <span class="rev-v ' + (isIn ? 'pos' : '') + '">' +
+                esc(money(t.amount, { cents: true, sign: true })) + '</span></div></div>' +
             '<div class="rev-a">' +
-              (isIn && list.length === 1
-                ? '<button class="btn btn-sm" data-rev-apply="' + esc(t.id) + '" title="Apply against the expense it reimbursed">Apply against…</button>'
-                : '') +
-              '<select class="inp rev-sel" data-rev-sel="' + esc(k) + '">' +
-                '<option value="">' + (isIn ? 'Keep as income…' : 'Choose…') + '</option>' + catOptions(x.cats, null, isIn ? 'in' : 'out') + '<option value="__new">+ New category…</option></select>' +
-              '<button class="icon-btn" data-rev-rec="' + esc(t.id) + '" title="This repeats — make it recurring">↻</button>' +
-              '<button class="icon-btn" data-rev-skip="' + esc(k) + '" title="' + (isIn ? 'Not income — leave it out' : 'Not spending — leave it out') + '">✕</button>' +
+              '<select class="inp rev-sel" data-rev-sel="' + esc(t.id) + '">' +
+                catOptions(x.cats, t.category, isIn ? 'in' : 'out') + '<option value="__new">+ New category…</option></select>' +
+              (isIn ? '<button class="btn btn-sm rev-apply" data-rev-apply="' + esc(t.id) + '" title="Apply against the expense it paid back">Apply…</button>' : '') +
+              '<button class="icon-btn rev-ok" data-rev-ok="' + esc(t.id) + '" title="Approve as shown">✓</button>' +
+              '<button class="icon-btn" data-rev-skip="' + esc(t.id) + '" title="' + (isIn ? 'Not income, leave it out' : 'Not spending, leave it out') + '">✕</button>' +
             '</div></div>';
-        }).join('') + (moreOut ? '<div class="rev-s" style="padding-top:10px">+ ' + moreOut + ' more merchants</div>' : '');
-      })() : '<div class="empty">Everything is categorised.</div>') +
+        }).join('') + (x.reviewQ.length > revLimit ? '<button class="ghost-btn rev-more" id="rev-more">Show ' + Math.min(REV_PAGE, x.reviewQ.length - revLimit) + ' more of ' + (x.reviewQ.length - revLimit) + '</button>' : '')
+      : '<div class="empty">All caught up. New transactions show up here.</div>') +
     '</div>' +
 
     // ── donut ──
@@ -446,40 +434,56 @@ function viewOverview(x) {
   if (tw) tw.onclick = () => { S.hideWindfallLine = !S.hideWindfallLine; D.saveState(S); render(); };
 
   $$('[data-rev-sel]').forEach(sel => sel.onchange = (e) => {
-    const key = sel.dataset.revSel;
-    let cat = e.target.value; if (!cat) return;
+    const id = sel.dataset.revSel;
+    const cat = e.target.value; if (!cat) return;
     if (cat === '__new') {
-      const row = sel.closest('.rev-row');
-      const dir = row && row.textContent.includes('money in') ? 'in' : 'out';
-      sel.value = '';
-      addCategory(x, dir, (newId) => { setRevCategory(key, newId, x); D.saveState(S); render(); });
+      const t = x.all.find(y => y.id === id);
+      sel.value = t ? t.category : '';
+      addCategory(x, t && t.amount > 0 ? 'in' : 'out', (newId) => { approveTxn(id, newId, x); D.saveState(S); render(); });
       return;
     }
-    setRevCategory(key, cat, x);
+    approveTxn(id, cat, x);
+    D.saveState(S); render();
+  });
+  $$('[data-rev-ok]').forEach(b => b.onclick = () => {
+    const sel = b.closest('.rev-row').querySelector('.rev-sel');
+    approveTxn(b.dataset.revOk, sel && sel.value !== '__new' ? sel.value : null, x);
     D.saveState(S); render();
   });
   $$('[data-rev-apply]').forEach(b => b.onclick = () => applyAgainst(b.dataset.revApply, x));
-  $$('[data-rev-rec]').forEach(b => b.onclick = () => {
-    // carry whatever category is already picked in the row across
-    const sel = b.closest('.rev-row').querySelector('.rev-sel');
-    const c = sel && sel.value && sel.value !== '__new' ? sel.value : null;
-    makeRecurring(b.dataset.revRec, x, c);
-  });
   $$('[data-rev-skip]').forEach(b => b.onclick = () => {
-    const key = b.dataset.revSkip;
-    for (const t of x.reviewQ) if (revKey(t) === key) S.excluded[t.id] = true;
+    const id = b.dataset.revSkip;
+    S.excluded[id] = true; (S.approved = S.approved || {})[id] = true;
     D.saveState(S); render();
   });
+  const ra = $('#rev-all');
+  if (ra) ra.onclick = () => {
+    if (!confirm('Approve all ' + x.reviewQ.length + ' with the category each one shows now?')) return;
+    for (const t of x.reviewQ) approveTxn(t.id, t.category, x, true);
+    D.saveState(S); render();
+  };
+  const rm = $('#rev-more');
+  if (rm) rm.onclick = () => { revLimit += REV_PAGE; render(); };
 }
 
-/* Review-queue keys: a deposit is keyed by its own id (one decision per deposit, no
-   rule written, since the next Venmo in may be a different friend or real income).
-   Charges group by merchant and setting one writes a merchant rule. */
-const revKey = (t) => t.amount > 0 ? 'in:' + t.id : D.normMerchant(t.merchant);
-function setRevCategory(key, cat, x) {
-  if (key.startsWith('in:')) { S.manual[key.slice(3)] = cat; return; }
-  for (const t of x.reviewQ) if (revKey(t) === key) S.manual[t.id] = cat;
-  addRule({ field: 'merchant', op: 'contains', value: key, category: cat }, true, x);
+/* ── APPROVAL LIST ──
+   Approving pins the category on that one transaction (S.manual), so a rule written
+   later never quietly re-files something Joey already OK'd. Choosing a different
+   category for a CHARGE also writes a merchant rule with no start date, so the rest
+   of that merchant's pending charges, and future ones, default to it. Deposits never
+   write a rule: the next Venmo in may be a different friend or real income. */
+const REV_PAGE = 15;
+let revLimit = REV_PAGE;
+function approveTxn(id, cat, x, bulk) {
+  const t = x.all.find(y => y.id === id); if (!t) return;
+  const chosen = cat || t.category;
+  S.manual[id] = chosen;
+  (S.approved = S.approved || {})[id] = true;
+  if (!bulk && t.amount < 0 && chosen !== t.category && chosen !== 'other') {
+    const rule = { field: 'merchant', op: 'contains', value: D.normMerchant(t.merchant), category: chosen };
+    S.rules = S.rules.filter(r => !D.sameRuleTarget(r, rule));
+    S.rules.unshift(rule);
+  }
 }
 
 /* ── RECURRING ── */

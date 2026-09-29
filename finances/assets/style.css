@@ -554,3 +554,29 @@ tr.is-out td .cat-pill { opacity: .7; }
 .dk-click:hover .dk-n { color: var(--fg); }
 
 .bal-move { display: block; font-size: 11px; color: var(--muted-2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+/* ───────────────────────── APPROVAL LIST ───────────────────────── */
+.rev-ok { color: var(--good); border-color: rgba(25,158,112,0.45); }
+.rev-ok:hover { color: #fff; background: rgba(25,158,112,0.2); border-color: rgba(25,158,112,0.7); }
+.rev-v.pos { color: var(--good); }
+.rev-more { width: 100%; margin-top: 12px; justify-content: center; }
+
+/* Phone: bigger, looser tap targets. The list is worked through with a thumb, so
+   every control gets ~44px and the actions drop to their own line under the
+   merchant. 16px on inputs also stops iOS zooming in when a select is tapped. */
+@media (max-width: 640px) {
+  .rev-row { flex-wrap: wrap; gap: 10px; padding: 14px 0; }
+  .rev-m { font-size: 15.5px; white-space: normal; }
+  .rev-s { font-size: 13.5px; margin-top: 4px; }
+  .rev-a { width: 100%; gap: 9px; }
+  .rev-sel { flex: 1 1 auto; max-width: none; min-height: 44px; font-size: 16px; padding: 10px 12px; }
+  .rev-a .icon-btn { width: 44px; height: 44px; font-size: 18px; border-radius: 10px; }
+  .rev-a .btn-sm { min-height: 44px; padding: 10px 14px; font-size: 14.5px; }
+  .rev-more, #rev-all { min-height: 44px; font-size: 14.5px; padding: 10px 16px; }
+  .inp { font-size: 16px; padding: 10px 12px; }
+  .btn { padding: 12px 16px; font-size: 14.5px; }
+  .btn-sm { padding: 10px 14px; font-size: 14px; }
+  .icon-btn { width: 36px; height: 36px; font-size: 15px; }
+  .cat-pill { padding: 6px 12px; font-size: 13px; }
+  .ghost-btn { min-height: 40px; }
+}

@@ -229,11 +229,31 @@ function ruleSideOk(r, txn, cats) {
   if (side === 'in') return txn.amount > 0;
   return true;
 }
+/* Starting suggestions for merchants Joey actually uses, so the approval list opens
+   on a sensible default instead of "Uncategorised". Rules he writes beat these. */
+const GUESSES = [
+  [/PAYROLL/i, 'payroll', 'in'],
+  [/UBER\s*\*?\s*EATS|DOORDASH|GRUBHUB|CAVIAR|SAMMY|PER DIEM|BAREBOTTLE|DIANA MARKET|STAR MARKET|SAFEWAY|TRADER JOE|WHOLE FOODS|FLATIRON WINES|PICNIC|CAFE|COFFEE|PIZZA|RESTAURANT/i, 'food', 'out'],
+  [/WAYMO|^UBER\b|UBER TRIP|LYFT|SHELL|CHEVRON|ARCO|CLIPPER|BART|MUNI|PARKING/i, 'transport', 'out'],
+  [/RENT\b|BILT RENT/i, 'housing', 'out'],
+  [/PG&E|COMCAST|XFINITY|VERIZON|T-MOBILE|AT&T|LEMONADE|METLIFE|INSURANCE|USPS/i, 'bills', 'out'],
+  [/SPOTIFY|NETFLIX|HULU|GOOGLE ONE|^APPLE$|APPLE\.COM|VERCEL|FIRECRAWL|NETSHORT|SUBTRACTION|EXPERIAN|OPENAI|ANTHROPIC|CLAUDE/i, 'subs', 'out'],
+  [/KAISER|KP RX|PHARMACY|CVS|WALGREENS|QUIP/i, 'health', 'out'],
+  [/ATM|CASH WITHDRAWAL/i, 'cash', 'out'],
+];
+function guess(txn) {
+  const dir = txn.amount > 0 ? 'in' : 'out';
+  const hay = (txn.merchant || '') + ' ' + (txn.description || '');
+  for (const [re, cat, side] of GUESSES) if (side === dir && (re.test(txn.merchant || '') || re.test(hay))) return cat;
+  return null;
+}
 export function applyRules(txn, rules, manual, cats) {
   if (manual[txn.id]) return { category: manual[txn.id], catSource: 'manual' };
   for (let i = 0; i < rules.length; i++) {
     if (ruleSideOk(rules[i], txn, cats) && ruleMatches(rules[i], txn)) return { category: rules[i].category, catSource: 'rule', ruleIdx: i };
   }
+  const g = (!txn.category || txn.category === 'other') && guess(txn);
+  if (g) return { category: g, catSource: 'auto', catConfidence: 'medium' };
   if (txn.category && txn.category !== 'other') {
     return { category: txn.category, catSource: 'auto', catConfidence: txn.catConfidence || 'medium' };
   }
@@ -246,6 +266,14 @@ export const categorise = (txns, rules, manual, cats) =>
    rule with any confidence. Money IN qualifies too — an odd deposit is either real
    income or somebody paying you back, and only Joey knows which. Payroll is
    excluded by the caller, since a matched recurring deposit needs no decision. */
+/* Every transaction waits for Joey's OK (his call, 2026-09-28: "more control").
+   A hand-set category, an exclusion or an apply-against already is a decision, so
+   anything decided before approvals existed doesn't come back. Auto-hidden past
+   gambling stays out of the list. */
+export const needsApproval = (t, state) =>
+  !t.autoHidden && !t.isApplied &&
+  !(state.approved || {})[t.id] && !(state.manual || {})[t.id] && !(state.excluded || {})[t.id];
+
 export const needsReview = (t) =>
   t.counts !== false &&
   ((t.catSource === 'none') || (t.catSource === 'auto' && t.catConfidence === 'low'));
@@ -407,6 +435,7 @@ export const DEFAULT_STATE = {
   excluded: {},        // txnId → true  ("don't count this")
   unhidden: {},        // txnId → true  (override an auto-hide)
   appliedAgainst: {},  // incomeTxnId → expenseTxnId
+  approved: {},        // txnId → true  (Joey OK'd it in the approval list)
   hideBefore: '2026-09-22',
   anchors: {},          // accountId → {amount,date}; balance carries forward from here
   pieMode: 'month',

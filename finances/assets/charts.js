@@ -5,7 +5,7 @@
    series, selective direct labels, crosshair that snaps to nearest X,
    and a table-view twin for every chart.
    ═══════════════════════════════════════════════════════════ */
-import { money, compact, d } from './data.js?v=049dc6204a';
+import { money, compact, d } from './data.js?v=6c6b7ec345';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}) => {
